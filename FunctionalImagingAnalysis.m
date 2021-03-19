@@ -1,5 +1,5 @@
 %% Settings
-PathName = 'C:\Users\david\Desktop\031721B\8'; %Path to the image
+PathName = 'C:\Users\david\Desktop\031721B\8\'; %Path to the image
 ImageName =  '031721_00008.tif'; %Image name
 preTime = 1; %How much pretime to plot (s)
 FPS = 10.9; %The frame rate of the image (Hz)
@@ -204,4 +204,4 @@ title('Decrease in SNR over time')
 
 %% Save all figures
 figHandles = findall(0,'Type','figure');
-savefig(figHandles,'')
+savefig(figHandles, [PathName 'AllFigs'])
