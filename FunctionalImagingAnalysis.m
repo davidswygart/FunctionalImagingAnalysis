@@ -1,15 +1,15 @@
 %% Settings
-PathName = 'C:\Users\david\Desktop\031721B\8\'; %Path to the image
-ImageName =  '031721_00008.tif'; %Image name
+PathName = 'C:\Users\david\Desktop\031721B\10\'; %Path to the image
+ImageName =  '031721_00010.tif'; %Image name
 preTime = 1; %How much pretime to plot (s)
 FPS = 10.9; %The frame rate of the image (Hz)
 numChannels = 3; %Number of channels in the raw image
 StimChannel = 3; %Which channel contains the stimulus info?
 AnalyzeChannel = 1; %Which channel is the flourophore (Gcamp/iGluSnFr)?
-RespThreshold = 1; %What level of SNR must the pixel have?
+RespThreshold = 5; %What level of SNR must the pixel have?
 
 numPreFrames = round(preTime * FPS); %How many frames to show for the preTime
-
+fnum = 1; %iterator to count figures
 
 %% Get image Information
 info = imfinfo([PathName ImageName]);
@@ -35,7 +35,8 @@ end
 %analyzeImage = analyzeImage - min(analyzeImage, [], 'all'); %Remove offset from anylyzeImage
 
 %% Display The average Analysis Image (t-projection)
-figure(1)
+figure(fnum)
+fnum = fnum+1;
 imagesc(mean(analyzeImage,3), [0,mean(analyzeImage, 'all') + .1 * std(analyzeImage, [], 'all')])
 c = colorbar;
 c.Label.String = 'Pixel Intensity';
@@ -82,30 +83,38 @@ avgSNRImage = mean(SNRImage, 3); %Find average SNR over all epochs for each pixe
 % avgSNR = mean(avgSNRImage, 'all');
 % stdSNR = std(avgSNRImage, [] , 'all');
 % respMask = (avgSNRImage > avgSNR+RespThreshold*stdSNR);
-respMask = (avgSNRImage > 5); %Arbitrarily using all pixels with at least an SNR of 5
+respMask = (avgSNRImage > RespThreshold); %Arbitrarily using all pixels with at least an SNR of the response Threshold
 
 linInds = find(respMask);
 [row, column] = ind2sub(size(respMask), linInds); 
 matrixInds = [row, column];
 
 %% Plot the average SNR Image and the thresholded SNR Image
-figure(2)
+figure(fnum)
+fnum = fnum+1;
 imagesc(avgSNRImage)
 c = colorbar;
 c.Label.String = 'SNR';
 title('SNR Image')
 
-figure(3)
+figure(fnum)
+fnum = fnum+1;
 imagesc(avgSNRImage , 'AlphaData', respMask)
 c = colorbar;
 c.Label.String = 'SNR';
 title(['First Threshold - (Threshold Mask ', num2str(RespThreshold), ' SNR)'])
 
 %% Create Matched Filter
-figure(4)
+figure(fnum)
+fnum = fnum+1;
 avgTrace = PlotResponseProfiles(EpochImage, matrixInds, SI, '1st threshold pixels');
-Filt = avgTrace(numPreFrames+1:end) / mean(avgTrace(numPreFrames+1:end));
+Filt = avgTrace(numPreFrames+1:end) - mean(avgTrace(1:numPreFrames));
+Filt = Filt / mean(Filt);
 
+figure(fnum)
+fnum = fnum+1;
+plot(numPreFrames+1:length(avgTrace), Filt)
+title('matched filter')
 
 
 % %% Plot non threshold pixels for sanity
@@ -141,24 +150,26 @@ avgSNRImage = mean(SNRImage, 3);
 % avgSNR = mean(avgSNRImage, 'all');
 % stdSNR = std(avgSNRImage, [] , 'all');
 % respMask = (avgSNRImage > avgSNR+RespThreshold*stdSNR);
-respMask = (avgSNRImage > 5);
+respMask = (avgSNRImage > RespThreshold);
 
 linInds = find(respMask);
 [row, column] = ind2sub(size(respMask), linInds);
 matrixInds = [row, column];
 
 %% Plot the average SNR Image and the thresholded SNR Image
-figure(5)
+figure(fnum)
+fnum = fnum+1;
 imagesc(avgSNRImage)
 c = colorbar;
 c.Label.String = 'SNR';
 title('SNR Image (from Matched Filter)')
 
-figure(6)
+figure(fnum)
+fnum = fnum+1;
 imagesc(avgSNRImage , 'AlphaData', respMask)
 c = colorbar;
 c.Label.String = 'SNR';
-title(['Second Threshold - (Threshold Mask ', num2str(RespThreshold), ' stds)'])
+title(['Second Threshold - (Threshold Mask ', num2str(RespThreshold), ' SNR)'])
 
 
 %% determine epoch spot size (Eventually make this so that it actually reads data from Symphony.  Right now I have just been doing every other spot size)
@@ -175,13 +186,15 @@ LargeSpotSNRImage = squeeze(mean(SNRImage(:,:,LargeInd),3));
 %% Find Suppression Index of all pixels above threshold
 SIImage = (SmallSpotSNRImage - LargeSpotSNRImage) ./ (SmallSpotSNRImage + LargeSpotSNRImage);
 
-figure(7)
+figure(fnum)
+fnum = fnum+1;
 imagesc(SIImage, 'AlphaData', respMask, [-.5,.8])
 c = colorbar;
 c.Label.String = 'Suppression Index (SI)';
 title('SI Image (Thresholded)')
 
-figure(8)
+figure(fnum)
+fnum = fnum+1;
 linInds = find(respMask);
 tempVals = SIImage(linInds);
 %tempVals(find(tempVals > 1)) = 1;
@@ -196,7 +209,8 @@ EpochSNR = nan(SI.numEpochs);
 for e = 1:SI.numEpochs
     EpochSNR(e) = mean(SNRImage(row, column, e), 'all');
 end
-figure(9)
+figure(fnum)
+fnum = fnum+1;
 plot(EpochSNR)
 xlabel('epoch number')
 ylabel('SNR')
