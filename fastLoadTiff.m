@@ -25,7 +25,7 @@ ifd_size = 20*ntags + 16;
 width = typecast(tags(13:14,1),'uint16');
 height = typecast(tags(13:14,2),'uint16');
 bitdepth = typecast(tags(13:14,3),'uint16');
-bitdepth_str = sprintf('uint%d', bitdepth);
+bitdepth_str = sprintf('int%d', bitdepth);
 bitdepth_load = sprintf('%s=>%s', bitdepth_str, bitdepth_str);
 bytesPerPixel = double(bitdepth) / 8;
 bytesPerStrip = bytesPerPixel * double(width) * double(height);
