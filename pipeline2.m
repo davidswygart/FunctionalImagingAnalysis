@@ -7,7 +7,7 @@ img = permute(reshape(img,ny, nx, 3,[]), [2, 1, 4, 3]);
 %% Bidirectional scan phase correction
 %Suite2P has a function for this, but seems like scanimage did well enough
 
-%% Image registration
+%% Image registration -- slow
 ops.useGPU = true;
 ops.kriging = true;
 ops.NiterPrealign = 20;
@@ -18,12 +18,13 @@ reg = rigidRegFrames(double(img(1:nx-1,:,:,1)), ops, ops.dsprealign); %from Suit
 %NOTE: not clear if it's better to align from the green or IR channel
 % IR has higher signal, but worse optical sectioning
 
-%% Deconvolution ~~ before/after registration? or not at all?
+%% Deconvolution -- slow ~~ before/after registration? or not at all?
 psf = fspecial('gaussian',12,0.9); %just a guess
 reg_dc = deconvlucy( reg, psf);
 
 %% ROI detection
 map = fastCorrelationMap(reg_dc,0.9); %adapted from Suite2P paper
+%blur parameter was chosen arbirarily
 
 %% Epoch windowing
 window = [-30 30]; %pretty arbitrary
@@ -43,6 +44,9 @@ all_SI_map = squeeze(median(all_SI,3));
 
 %% Plot SI vs ROI
 roi_thresh = .1; %crude, but a simple start
+% note that as written this will bias us away from detecting terminals with
+% SI variance
+
 masked = nan(nx-1,ny);
 masked(map > roi_thresh) = all_SI_map(map > roi_thresh);
 % imagesc(masked)
