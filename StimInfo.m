@@ -1,63 +1,63 @@
-function stimInfo = StimInfo(stimTrace, numPreFrames, makePlots)
-if nargin < 3
-    makePlots = 0;
-end
-
+function outputStruct = StimInfo(stimTrace, settings)
+%% Find Onset and offset of stimulus (in z indices)
 stimTrace = squeeze(stimTrace);
 Deriv = diff(stimTrace);
 threshold = std(Deriv);
-Onset = find(Deriv > threshold) + 1;
-Offset = find(Deriv < threshold*-1);  % I do not add 1 so that the offset is actually the last epoch of the stimulus ON.
+Onset = find(Deriv > threshold) + 2; % I add 1 because everything is shifted 1 by diff(), I add another 1 because the frame must be on before the stimulus is actually shown during the flyback
+Offset = find(Deriv < threshold*-1) + 2;
 
 Onset(diff(Onset) < 2) = []; %Remove repeats
 Offset(diff(Offset) < 2) = []; %Remove repeats
-numEpochs = length(Offset);
-Onset = Onset(1:numEpochs); %Get rid of extra Onset if it doesn't have a corresponding offset.
+Onset = Onset(1:length(Offset)); %Get rid of extra Onset if it doesn't have a corresponding offset.
 
-if makePlots
-    figure(98)
-    plot(Deriv)
-    hold on
-    scatter(Onset, Deriv(Onset))
-    scatter(Offset, Deriv(Offset))
-    plot([0,length(Deriv)], [threshold, threshold])
-    plot([0,length(Deriv)], [-1*threshold, -1*threshold])
-    xlabel('zframes')
-    ylabel('Derivative of pixel intensities')
-    
-    
-    figure(99)
-    plot(stimTrace)
-    hold on
-    scatter(Onset, stimTrace(Onset))
-    scatter(Offset, stimTrace(Offset))
-    xlabel('zframes')
-    ylabel('pixelIntensity')
+%% Find average length of the stimulus (easier to just go with average so that traces are consistent, but we are giving up a little fidelity)
+numStimFrames = Offset - Onset;
+if range(numStimFrames) > 1
+    warning(['The number of stimulus frames varies by ', num2str(range(numStimFrames))])
+end
+numStimFrames = mean(numStimFrames);
+
+%% Check that frames are not outside the bounds of the image
+numPreFrames = settings.preTime * settings.frameRate;
+numPostFrames = settings.postTime * settings.frameRate;
+
+badEpoch = find(any(...
+Onset - numPreFrames < 0 |... 
+Onset + numStimFrames + numPostFrames > length(stimTrace) ...
+,2));
+
+if badEpoch
+    warning(['Had to remove epoch ' mat2str(badEpoch)...
+        ' because the pre or post stime stretched outside the bounds of the image.'])
+    Onset(badEpoch,:) = [];
+    Offset(badEpoch,:) = [];
 end
 
-FramePerStim = Offset - Onset;
-if range(FramePerStim) > 5
-    error('Greater than 5 epoch difference between stim lengths')
-end
+%% Save important info to the output Struct
+outputStruct.numStimFrames = numStimFrames;
+outputStruct.stimOnsetFrames = Onset;
+outputStruct.stimOffsetFrames = Offset;
+outputStruct.numEpochs = length(Offset);
+outputStruct.epochSeconds = settings.preTime + settings.postTime + numStimFrames/settings.frameRate; %the length of the experiment in seconds
+outputStruct.frameTime = (0:length(stimTrace)-1)/settings.frameRate;
 
-FramePerStim = round(mean(FramePerStim));
-FPE = round(mean(diff(Onset))); %Frames per epoch
-postFrames = FPE - numPreFrames - FramePerStim;
+%% Plot Onset and Offset detection
+figure(2)
+subplot(2,1,1)
+plot(Deriv)
+hold on
+scatter(Onset, Deriv(Onset))
+scatter(Offset, Deriv(Offset))
+plot([0,length(Deriv)], [threshold, threshold])
+plot([0,length(Deriv)], [-1*threshold, -1*threshold])
+ylabel('Derivative of pixel intensities')
 
-if Offset(end) + postFrames > length(stimTrace)
-   disp('remvoed last epoch because the postTime was too short')
-   Onset = Onset(1:end-1);
-   Offset = Offset(1:end-1);
-   numEpochs = length(Offset);
-end
 
-
-
-stimInfo.numEpochs = numEpochs;
-stimInfo.Onset = Onset;
-stimInfo.Offset = Offset;
-stimInfo.FramePerStim = FramePerStim;
-stimInfo.postFrames = postFrames;
-stimInfo.preFrames = numPreFrames;
-stimInfo.TraceLength = FramePerStim + numPreFrames + postFrames;
+subplot(2,1,2)
+plot(stimTrace)
+hold on
+scatter(Onset, stimTrace(Onset))
+scatter(Offset, stimTrace(Offset))
+xlabel('zframes')
+ylabel('pixelIntensity')
 end

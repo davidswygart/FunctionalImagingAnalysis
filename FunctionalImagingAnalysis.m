@@ -1,81 +1,86 @@
 %% Settings
-PathName = 'C:\Users\david\Desktop\031721B\10\'; %Path to the image
-ImageName =  '031721_00010.tif'; %Image name
-preTime = 1; %How much pretime to plot (s)
-FPS = 10.9; %The frame rate of the image (Hz)
-numChannels = 3; %Number of channels in the raw image
-StimChannel = 3; %Which channel contains the stimulus info?
-AnalyzeChannel = 1; %Which channel is the flourophore (Gcamp/iGluSnFr)?
-RespThreshold = 5; %What level of SNR must the pixel have?
+PathName = 'C:\Users\david\Desktop\GCamp6_test_images\031721B\8\'; %Path to the image
+ImageName =  '031721_00008.tif'; %Image name
+settings.numChannels = 3; %Number of channels in the raw image
+settings.StimChannel = 3; %Which channel contains the stimulus info?
+settings.AnalyzeChannel = 1; %Which channel is the flourophore (Gcamp/iGluSnFr)?
+settings.preTime = 1; %How much pretime to plot (s)
+settings.postTime = 1; %How much postTime to plot (s)
+settings.upscaleFreq = 500; %What frequency to resample for improved stimulus alignment
+settings.downscaleFreq = 50; %Downscale for easier computation
+settings.respThreshold = 3; %What level of SNR must the pixel have?
 
-numPreFrames = round(preTime * FPS); %How many frames to show for the preTime
-fnum = 1; %iterator to count figures
+%% Get Image Info
+imgInfo = imfinfo([PathName ImageName]);
+imgInfo = imgInfo(1);
+imgInfo.SoftwareDict = char2dict(imgInfo.Software);
 
-%% Get image Information
-info = imfinfo([PathName ImageName]);
-[Height, Width] = size(imread([PathName ImageName], 1));
-Zdepth = numel(info);
-% Zdepth = 3000; %Temporary change to shorten processing
+settings.flyback = imgInfo.SoftwareDict('SI.hScan2D.flybackTimePerFrame');
+settings.pixDwell = imgInfo.SoftwareDict('SI.hScan2D.scanPixelTimeMean');
+settings.frameRate = imgInfo.SoftwareDict('SI.hRoiManager.scanFrameRate');
+settings.numRows = imgInfo.Height;
+settings.numColumns = imgInfo.Width;
+settings.XResolution = imgInfo.XResolution;
+settings.YResolution = imgInfo.YResolution;
+
 
 %% Load Image (Deinterleaving into stimulus and analysis images)
-z = 1;
-stimImage = zeros(Height, Width, Zdepth/numChannels);
-for i=StimChannel:numChannels:Zdepth
-    stimImage(:,:,z) = imread([PathName ImageName], i);
-    z = z + 1;
-end
-
-z = 1;
-analyzeImage = zeros(Height, Width, Zdepth/numChannels);
-for i=AnalyzeChannel:numChannels:Zdepth
-    analyzeImage(:,:,z) = imread([PathName ImageName], i);
-    z = z + 1;
-end
-
-%analyzeImage = analyzeImage - min(analyzeImage, [], 'all'); %Remove offset from anylyzeImage
+[image,res] = fastLoadTiff([PathName ImageName]); %Load Image
+image = double(image);
+image = permute(image, [2,1,3]); %Change so Image isn't rotated.  Might want to do this in fastLoadTiff()
+stimImage = image(:,:,settings.StimChannel:settings.numChannels:end);
+analyzeImage = image(:,:,settings.AnalyzeChannel:settings.numChannels:end);
+analyzeImage = analyzeImage - min(analyzeImage, [], 'all'); %Remove offset from anylyzeImage
 
 %% Display The average Analysis Image (t-projection)
-figure(fnum)
-fnum = fnum+1;
+figure(1)
 imagesc(mean(analyzeImage,3), [0,mean(analyzeImage, 'all') + .1 * std(analyzeImage, [], 'all')])
 c = colorbar;
 c.Label.String = 'Pixel Intensity';
 title('Z projection (avgerage)')
 
-%% Build Image with epochs as dimension (also create SNR Image using average response during stimulus)
-SI = StimInfo(stimImage(1,1,:), numPreFrames, 1); %Detect onset and offset of stimulus and plot
-%SI = StimInfo(mean(AnalyzeImage(end,1:7,:), 2), numPreFrames, 1); %Temporary fix for forgotten CH4
+%% Find when the stimulus turned On and Off.  Convert this to upscaled frequency.
+SI = StimInfo(stimImage(end,1,:), settings); %Detect stimulus onset in orignal frames
+upscaled = identifyEpochFrames(SI, settings, settings.upscaleFreq); %Find the frame numbers for PreTime, StimTime, and PostTime in upscaled frequency
+downscaled = identifyEpochFrames(SI, settings, settings.downscaleFreq);
 
-EpochImage = nan(Height, Width, SI.TraceLength, SI.numEpochs);
-EpochStim = EpochImage;
-SNRImage = nan(Height, Width, SI.numEpochs);
-for h = 1:Height
-    for w = 1:Width
-        si = StimInfo(stimImage(h,w,:), numPreFrames); % For every pixel, redetect onset and offset of stimulus.  Will be very similar to SI, but might be a frame or so shifted.
-        %si = SI; %Temporary fix for forgotten CH4
+%% Calculate the delay for each pixel (in seconds)
+numPixels = settings.numRows * settings.numColumns;
+delay = linspace(settings.flyback, 1/settings.frameRate, numPixels); %calculate delay in seconds
+%delay = round(delay*settings.upscaleFreq);%convert delay to upscaled frames
+delayImage = reshape(delay, [settings.numColumns, settings.numRows]); %Reshape into the image size
+delayImage = permute(delayImage, [2,1]);
+delayImage(2:2:settings.numRows,:) = flip(delayImage(2:2:settings.numRows,:),2);% only needed when bidirectional scan
+
+%% Build Image with epochs as dimension.  First use upscaled frames and then downscale them (also create SNR Image using average response during stimulus)
+EpochImage = nan(settings.numRows, settings.numColumns, downscaled.numEpochFrames, SI.numEpochs);
+SNRImage = nan(settings.numRows, settings.numColumns, SI.numEpochs);
+
+for h = 1:settings.numRows
+    for w = 1:settings.numColumns
+        upscaledTrace = interp1(SI.frameTime, squeeze(analyzeImage(h,w,:)), upscaled.frameTime, 'previous');
+        pixelDelay = delayImage(h,w);
+        downscaledTrace = interp1(upscaled.frameTime+pixelDelay, upscaledTrace, downscaled.frameTime, 'linear');
+        
         for e = 1:SI.numEpochs
-            epochframes = si.Onset(e)-numPreFrames:si.Onset(e)+SI.FramePerStim+SI.postFrames-1; %Epoch Frames include preFrames, StimFrames, and Post Frames
-            EpochImage(h,w,:,e) = analyzeImage(h,w,epochframes); %This is the raw analysis values for each pixel split into epochs.
-            EpochStim(h,w,:,e) = stimImage(h,w,epochframes); %This image is just for sanity checks, to make sure our stimulus is lining up.
+            allFrames = downscaled.allFrames(e,:);
+            preFrames = downscaled.preFrames(e,:);
+            stimFrames = downscaled.stimFrames(e,:);
+            postFrames = downscaled.postFrames(e,:);
             
-            preFrames = si.Onset(e) - numPreFrames : si.Onset(e) - 1; %These are the frames before the stimulus
-            avgPre = mean(analyzeImage(h,w,preFrames));
-            stdPre = std(analyzeImage(h,w,preFrames));
-            
-            stimFrames = si.Onset(e):si.Offset(e); %These are the frames during the stimulus
-            avgStim = mean(analyzeImage(h,w,stimFrames));
-            
+            avgPre = mean(downscaledTrace(preFrames));
+            stdPre = std(downscaledTrace(preFrames));
+            avgStim = mean(downscaledTrace(stimFrames));
             SNRImage(h,w,e) = (avgStim - avgPre) / stdPre; %Calculate signal to noise ratio using preStim as noise and Stim as signal.
+            
+            EpochImage(h,w,:,e) = downscaledTrace(allFrames); 
         end
     end
 end
 
-%% Cut off First few rows and last Row because of bleed through
-EpochImage = EpochImage(4:end-1,:,:,:);
-EpochStim = EpochStim(4:end-1,:,:,:);
-SNRImage = SNRImage(4:end-1,:,:); %For now just cut off first and last row of pixels
-
-
+%% blank out the first few rows and last row of SNR image because of bleed through.
+SNRImage(1:4,:,:) = 0;
+SNRImage(end,:,:) = 0;
 
 %% Find responsive pixels (1st threshold)
 avgSNRImage = mean(SNRImage, 3); %Find average SNR over all epochs for each pixel (Not splitting by spot size)
@@ -83,93 +88,89 @@ avgSNRImage = mean(SNRImage, 3); %Find average SNR over all epochs for each pixe
 % avgSNR = mean(avgSNRImage, 'all');
 % stdSNR = std(avgSNRImage, [] , 'all');
 % respMask = (avgSNRImage > avgSNR+RespThreshold*stdSNR);
-respMask = (avgSNRImage > RespThreshold); %Arbitrarily using all pixels with at least an SNR of the response Threshold
+respMask = (avgSNRImage > settings.respThreshold); %Arbitrarily using all pixels with at least an SNR of the response Threshold
 
 linInds = find(respMask);
 [row, column] = ind2sub(size(respMask), linInds); 
 matrixInds = [row, column];
 
 %% Plot the average SNR Image and the thresholded SNR Image
-figure(fnum)
-fnum = fnum+1;
+figure(3)
 imagesc(avgSNRImage)
 c = colorbar;
 c.Label.String = 'SNR';
 title('SNR Image')
 
-figure(fnum)
-fnum = fnum+1;
+figure(4)
 imagesc(avgSNRImage , 'AlphaData', respMask)
 c = colorbar;
 c.Label.String = 'SNR';
-title(['First Threshold - (Threshold Mask ', num2str(RespThreshold), ' SNR)'])
+title(['First Threshold - (Threshold Mask ', num2str(settings.respThreshold), ' SNR)'])
 
-%% Create Matched Filter
-figure(fnum)
-fnum = fnum+1;
-avgTrace = PlotResponseProfiles(EpochImage, matrixInds, SI, '1st threshold pixels');
-Filt = avgTrace(numPreFrames+1:end) - mean(avgTrace(1:numPreFrames));
-Filt = Filt / mean(Filt);
+%% Plot response trace of all responsive pixels
+figure(5)
+avgTrace = PlotResponseProfiles(EpochImage, matrixInds, downscaled, '1st threshold pixels');
 
-figure(fnum)
-fnum = fnum+1;
-plot(numPreFrames+1:length(avgTrace), Filt)
-title('matched filter')
-
-
-% %% Plot non threshold pixels for sanity
-% linInds = find(~respMask);
-% [nrow, ncolumn] = ind2sub(size(respMask), linInds);
-% nmatrixInds = [nrow, ncolumn];
-% avgTrace = PlotResponseProfiles(EpochImage, nmatrixInds, SI, 'NonThreshold Pixels');
-%%  Remake SNR image with Matched Filter
-SNRImage = nan(Height, Width, SI.numEpochs);
-for h = 1:Height
-    for w = 1:Width
-        si = StimInfo(stimImage(h,w,:), numPreFrames);
-        for e = 1:SI.numEpochs
-            preFrames = si.Onset(e) - numPreFrames : si.Onset(e) - 1;
-            avgPre = mean(analyzeImage(h,w,preFrames));
-            stdPre = std(analyzeImage(h,w,preFrames));
-            
-            stimFrames = si.Onset(e):si.Onset(e)+length(Filt)-1;
-            stimData = squeeze(analyzeImage(h,w,stimFrames))';
-            filtStim = mean(Filt .* stimData);
-            
-            SNRImage(h,w,e) = (filtStim - avgPre) / stdPre;
-        end
-    end
-end
-
-%% Cut off First few rows and last Row because of bleed through (again)
-SNRImage = SNRImage(4:end-1,:,:); %For now just cut off first and last row of pixels
-
-%% Find responsive pixels 
-avgSNRImage = mean(SNRImage, 3);
-
-% avgSNR = mean(avgSNRImage, 'all');
-% stdSNR = std(avgSNRImage, [] , 'all');
-% respMask = (avgSNRImage > avgSNR+RespThreshold*stdSNR);
-respMask = (avgSNRImage > RespThreshold);
-
-linInds = find(respMask);
-[row, column] = ind2sub(size(respMask), linInds);
-matrixInds = [row, column];
-
-%% Plot the average SNR Image and the thresholded SNR Image
-figure(fnum)
-fnum = fnum+1;
-imagesc(avgSNRImage)
-c = colorbar;
-c.Label.String = 'SNR';
-title('SNR Image (from Matched Filter)')
-
-figure(fnum)
-fnum = fnum+1;
-imagesc(avgSNRImage , 'AlphaData', respMask)
-c = colorbar;
-c.Label.String = 'SNR';
-title(['Second Threshold - (Threshold Mask ', num2str(RespThreshold), ' SNR)'])
+% %% Create matched filter
+% Filt = avgTrace((downscaled.numPreFrames+1):end) - mean(avgTrace(1:downscaled.numPreFrames));
+% Filt = Filt / mean(Filt);
+% 
+% figure(6)
+% plot(numPreFrames+1:length(avgTrace), Filt)
+% title('matched filter')
+% 
+% 
+% % %% Plot non threshold pixels for sanity
+% % linInds = find(~respMask);
+% % [nrow, ncolumn] = ind2sub(size(respMask), linInds);
+% % nmatrixInds = [nrow, ncolumn];
+% % avgTrace = PlotResponseProfiles(EpochImage, nmatrixInds, SI, 'NonThreshold Pixels');
+% %%  Remake SNR image with Matched Filter
+% SNRImage = nan(settings.numRows, settings.numChannels, SI.numEpochs);
+% for h = 1:Height
+%     for w = 1:Width
+%         si = StimInfo(stimImage(h,w,:), numPreFrames);
+%         for e = 1:SI.numEpochs
+%             preFrames = si.Onset(e) - numPreFrames : si.Onset(e) - 1;
+%             avgPre = mean(analyzeImage(h,w,preFrames));
+%             stdPre = std(analyzeImage(h,w,preFrames));
+%             
+%             stimFrames = si.Onset(e):si.Onset(e)+length(Filt)-1;
+%             stimData = squeeze(analyzeImage(h,w,stimFrames))';
+%             filtStim = mean(Filt .* stimData);
+%             
+%             SNRImage(h,w,e) = (filtStim - avgPre) / stdPre;
+%         end
+%     end
+% end
+% 
+% %% Cut off First few rows and last Row because of bleed through (again)
+% %SNRImage = SNRImage(4:end-1,:,:); %For now just cut off first and last row of pixels
+% 
+% %% Find responsive pixels 
+% avgSNRImage = mean(SNRImage, 3);
+% 
+% % avgSNR = mean(avgSNRImage, 'all');
+% % stdSNR = std(avgSNRImage, [] , 'all');
+% % respMask = (avgSNRImage > avgSNR+RespThreshold*stdSNR);
+% respMask = (avgSNRImage > RespThreshold);
+% 
+% linInds = find(respMask);
+% [row, column] = ind2sub(size(respMask), linInds);
+% matrixInds = [row, column];
+% 
+% %% Plot the average SNR Image and the thresholded SNR Image
+% figure(7)
+% imagesc(avgSNRImage)
+% c = colorbar;
+% c.Label.String = 'SNR';
+% title('SNR Image (from Matched Filter)')
+% 
+% figure(8)
+% imagesc(avgSNRImage , 'AlphaData', respMask)
+% c = colorbar;
+% c.Label.String = 'SNR';
+% title(['Second Threshold - (Threshold Mask ', num2str(settings.respThreshold), ' SNR)'])
 
 
 %% determine epoch spot size (Eventually make this so that it actually reads data from Symphony.  Right now I have just been doing every other spot size)
@@ -186,15 +187,13 @@ LargeSpotSNRImage = squeeze(mean(SNRImage(:,:,LargeInd),3));
 %% Find Suppression Index of all pixels above threshold
 SIImage = (SmallSpotSNRImage - LargeSpotSNRImage) ./ (SmallSpotSNRImage + LargeSpotSNRImage);
 
-figure(fnum)
-fnum = fnum+1;
+figure(9)
 imagesc(SIImage, 'AlphaData', respMask, [-.5,.8])
 c = colorbar;
 c.Label.String = 'Suppression Index (SI)';
 title('SI Image (Thresholded)')
 
-figure(fnum)
-fnum = fnum+1;
+figure(10)
 linInds = find(respMask);
 tempVals = SIImage(linInds);
 %tempVals(find(tempVals > 1)) = 1;
@@ -205,12 +204,13 @@ ylabel('Count')
 title('SI values of thresholded pixels')
 
 %% Plot Response over time to see beaching
-EpochSNR = nan(SI.numEpochs);
+EpochSNR = nan(SI.numEpochs,1);
+numRespPixels = sum(respMask, 'all');
 for e = 1:SI.numEpochs
-    EpochSNR(e) = mean(SNRImage(row, column, e), 'all');
+    SNR_sum = sum(SNRImage(:,:,e) .* respMask, 'all');
+    EpochSNR(e) = SNR_sum / numRespPixels;
 end
-figure(fnum)
-fnum = fnum+1;
+figure(11)
 plot(EpochSNR)
 xlabel('epoch number')
 ylabel('SNR')
