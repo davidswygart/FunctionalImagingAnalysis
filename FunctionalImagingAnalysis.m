@@ -30,7 +30,7 @@ image = double(image);
 image = permute(image, [2,1,3]); %Change so Image isn't rotated.  Might want to do this in fastLoadTiff()
 stimImage = image(:,:,settings.StimChannel:settings.numChannels:end);
 analyzeImage = image(:,:,settings.AnalyzeChannel:settings.numChannels:end);
-analyzeImage = analyzeImage - min(analyzeImage, [], 'all'); %Remove offset from anylyzeImage
+%analyzeImage = analyzeImage - min(analyzeImage, [], 'all'); %Remove offset from anylyzeImage
 
 %% Display The average Analysis Image (t-projection)
 figure(1)

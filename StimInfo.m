@@ -51,7 +51,7 @@ scatter(Offset, Deriv(Offset))
 plot([0,length(Deriv)], [threshold, threshold])
 plot([0,length(Deriv)], [-1*threshold, -1*threshold])
 ylabel('Derivative of pixel intensities')
-
+hold off
 
 subplot(2,1,2)
 plot(stimTrace)
@@ -60,4 +60,5 @@ scatter(Onset, stimTrace(Onset))
 scatter(Offset, stimTrace(Offset))
 xlabel('zframes')
 ylabel('pixelIntensity')
+hold off
 end
