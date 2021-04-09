@@ -16,7 +16,6 @@ imgInfo = imgInfo(1);
 imgInfo.SoftwareDict = char2dict(imgInfo.Software);
 
 settings.flyback = imgInfo.SoftwareDict('SI.hScan2D.flybackTimePerFrame');
-settings.pixDwell = imgInfo.SoftwareDict('SI.hScan2D.scanPixelTimeMean');
 settings.frameRate = imgInfo.SoftwareDict('SI.hRoiManager.scanFrameRate');
 settings.numRows = imgInfo.Height;
 settings.numColumns = imgInfo.Width;
@@ -36,7 +35,7 @@ analyzeImage = image(:,:,settings.AnalyzeChannel:settings.numChannels:end);
 figure(1)
 imagesc(mean(analyzeImage,3), [0,mean(analyzeImage, 'all') + .1 * std(analyzeImage, [], 'all')])
 c = colorbar;
-c.Label.String = 'Pixel Intensity';
+c.Label.String = 'Pixel Intensity'; 
 title('Z projection (avgerage)')
 
 %% Find when the stimulus turned On and Off.  Convert this to upscaled frequency.
