@@ -1,8 +1,8 @@
 %% I/O
-file_name_and_path = '../031721B/031721_00010.tif';
+file_name_and_path = '../031821B/RGCs_chirp_00001.tif';
 [img, res] = fastLoadTiff(file_name_and_path);
 [ny,nx] = size(img,1,2);
-img = permute(reshape(img,ny, nx, 3,[]), [2, 1, 4, 3]);
+img = permute(img, [2, 1, 4, 3]);
 
 %% Bidirectional scan phase correction
 %Suite2P has a function for this, but seems like scanimage did well enough

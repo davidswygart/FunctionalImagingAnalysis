@@ -20,6 +20,8 @@ ntags = fread(f,1,'uint64=>uint64');
 tags = fread(f,[20,ntags], 'uint8=>uint8');
 next = fread(f,1,'uint64=>uint64');
 ifd_size = 20*ntags + 16;
+nread = nread + ifd_size;
+
 
 %TODO: maybe don't hard code these?
 width = typecast(tags(13:14,1),'uint16');
@@ -38,31 +40,72 @@ loc_loc = (8 + 20*6 + 13):(8 + 20*6 + 13 + 7); %should be 141:148
 next_loc = ifd_size-7 : ifd_size;
 
 
+% [info, nread] = read_tag_from_pointer(f, tags(:,6), nread); %frame timing
+% [info, nread] = read_tag_from_pointer(f, tags(:,17), nread); %rois
+[info, nread] = read_tag_from_pointer(f, tags(:,16), nread); %SI state
+[~,tok,~] = regexp(info', 'SI.hChannels.channelSave = (\[[\d;]+\])','match','tokens','tokenExtents');
+nchans = length(str2num(tok{1}{1})); %#ok<ST2NM>
+
+%TODO: also consider SI.hStackManager.numSlices
+
 bytesPerFrame = bytesPerStrip + ifd_size;
 
 file_bytes = dir(file_name_and_path).bytes;
 maxFrames = floor((file_bytes-nread)/ bytesPerFrame);
 image = zeros(width,height,maxFrames,bitdepth_str);
 
-nread = nread + ifd_size;
+
 for i = 1:maxFrames
-    skipped = fread(f, loc-nread, 'uint8=>uint8');
+    fread(f, loc-nread, 'uint8=>uint8'); %TODO: probably faster to use fseek?
     image(:,:,i) = fread(f, [width, height], bitdepth_load);
     
     if next > file_bytes || next < nread
         break
     end
     
-    skipped = fread(f, next - loc - bytesPerStrip, 'uint8=>uint8');
+    fread(f, next - loc - bytesPerStrip, 'uint8=>uint8');
     ifd = fread(f, ifd_size, 'uint8=>uint8');
     nread = next + ifd_size;
     loc = typecast(ifd(loc_loc),'uint64');
     next = typecast(ifd(next_loc), 'uint64');
 end
 
-image = image(:,:,1:i);
+image = reshape(image(:,:,1:i), width, height, nchans, []);
     
 end
+
+function [tag_data, nread] =read_tag_from_pointer(f, tag, nread)
+
+    count = typecast(tag(5:12),'uint64');
+    loc = typecast(tag(13:end),'uint64');
+%     fread(f, loc - nread,'uint8=>uint8');
+    fseek(f, loc, -1);
+    
+    rat = false;
+    
+    switch typecast(tag(3:4),'uint16')
+        case 1
+            read_str = 'uint8=>uint8';
+        case 2
+            read_str = 'char=>char';
+        case 3
+            read_str = 'uint16=>uint16';
+        case 5
+            read_str = 'uint64=>uint64';
+            rat = true;
+        case 16
+            read_str = 'uint64=>unit64';
+    end
+    
+    tag_data = fread(f, count, read_str);
+    
+    if rat
+        error('need to define behavior for rationals');
+    end
+
+    nread = loc + count;
+end
+
 % NOTE: the tag data is formatted as below
 % ids = typecast(reshape(tags(1:2,:),[],1),'uint16');
 % types = typecast(reshape(tags(3:4,:),[],1),'uint16');
