@@ -1,5 +1,5 @@
 %% I/O
-file_name_and_path = '../031821B/RGCs_chirp_00001.tif';
+file_name_and_path = '../060321B/nnos_mid_neg_00004.tif';
 [img, res] = fastLoadTiff(file_name_and_path);
 [ny,nx] = size(img,1,2);
 img = permute(img, [2, 1, 4, 3]);
@@ -13,8 +13,8 @@ ops.kriging = true;
 ops.NiterPrealign = 20;
 ops.Lx = ny;
 ops.Ly = nx-1; %ignore last row, due to projector artifact
-ops = alignIterative(double(img(1:nx-1,:,:,2)),ops); %from Suite2P ~ align using transmitted IR?
-reg = rigidRegFrames(double(img(1:nx-1,:,:,1)), ops, ops.dsprealign); %from Suite2P
+ops = alignIterative(double(img(1:nx-1,22:nx-23,:,3)),ops); %from Suite2P ~ align using transmitted IR?
+reg = rigidRegFrames(double(img(1:nx-1,:,:,2)), ops, ops.dsprealign); %from Suite2P
 %NOTE: not clear if it's better to align from the green or IR channel
 % IR has higher signal, but worse optical sectioning
 
@@ -27,6 +27,14 @@ map = fastCorrelationMap(reg_dc,0.9); %adapted from Suite2P paper
 %blur parameter was chosen arbirarily
 
 %% Epoch windowing
+[on, off] = fastGetTriggerTime(img(:,:,:,end));
+off(end) = []; on(end) = []; %there's a light step at the end to kill the mean?
+dur = floor(min(off-on)/(nx*ny));
+all_E = reshape(reg_dc(:,:,round(on/(nx*ny)) + (-50:dur)), nx-1, ny, length(on), []);
+all_dFoF = (all_E - mean(all_E(:,:,:,1:50), 4)) ./ mean(all_E(:,:,:,1:50),4);
+
+
+%% Suppression index stuff
 window = [-30 30]; %pretty arbitrary
 [on,off] = fastGetTriggerTime(img(:,:,:,3));
 all_E = reshape(reg_dc(:,:,round(on/(nx*ny)) + (window(1):window(2))), nx-1, ny, length(on),[]);

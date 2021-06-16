@@ -1,4 +1,4 @@
-function [image,res] = fastLoadTiff(file_name_and_path)
+function [image,res,metadata,ts] = fastLoadTiff(file_name_and_path)
 
 f = fopen(file_name_and_path,'r');
 header = fread(f,16,'uint8=>uint8');
@@ -39,11 +39,12 @@ res = [res(2)/res(1) res(4)/res(3)] * 1e4; %in microns
 loc_loc = (8 + 20*6 + 13):(8 + 20*6 + 13 + 7); %should be 141:148
 next_loc = ifd_size-7 : ifd_size;
 
-
+%col 6 -> "imagedescription", col 16 -> "software" col 17 -> "artist"
 % [info, nread] = read_tag_from_pointer(f, tags(:,6), nread); %frame timing
 % [info, nread] = read_tag_from_pointer(f, tags(:,17), nread); %rois
-[info, nread] = read_tag_from_pointer(f, tags(:,16), nread); %SI state
-[~,tok,~] = regexp(info', 'SI.hChannels.channelSave = (\[[\d;]+\])','match','tokens','tokenExtents');
+[metadata, nread] = read_tag_from_pointer(f, tags(:,16), nread); %SI state
+metadata = metadata';
+[~,tok,~] = regexp(metadata, 'SI.hChannels.channelSave = (\[[\d;]+\])','match','tokens','tokenExtents');
 nchans = length(str2num(tok{1}{1})); %#ok<ST2NM>
 
 %TODO: also consider SI.hStackManager.numSlices
@@ -54,23 +55,57 @@ file_bytes = dir(file_name_and_path).bytes;
 maxFrames = floor((file_bytes-nread)/ bytesPerFrame);
 image = zeros(width,height,maxFrames,bitdepth_str);
 
+if nargout>3
+    ts = zeros(1,maxFrames);
+    %get epoch from imagedesc
+    desc_loc = (109:128)';
+    [desc, nread] = read_tag_from_pointer(f, tags(:,6), nread);
+    [~,tok,~] = regexp(desc', 'epoch = (\[([\d\,\.]+)\])','match','tokens','tokenExtents');
+    epoch = str2num(tok{1}{1});
+    
+    for i = 1:maxFrames
+        fread(f, loc-nread, 'uint8=>uint8'); %TODO: probably faster to use fseek?
+        image(:,:,i) = fread(f, [width, height], bitdepth_load);
 
-for i = 1:maxFrames
-    fread(f, loc-nread, 'uint8=>uint8'); %TODO: probably faster to use fseek?
-    image(:,:,i) = fread(f, [width, height], bitdepth_load);
+        if next > file_bytes || next < nread
+            break
+        end
+
+        fread(f, next - loc - bytesPerStrip, 'uint8=>uint8');
+        ifd = fread(f, ifd_size, 'uint8=>uint8');
+%         tags = reshape(ifd(9:end-8),20,[]);
+        nread = next + ifd_size;
+        [desc, nread] = read_tag_from_pointer(f, ifd(desc_loc), nread);
+        [~,tok,~] = regexp(desc', 'frameTimestamps_sec = (\d+\.\d+)','match','tokens','tokenExtents');
+        ts(i) = str2num(tok{1}{1});
     
-    if next > file_bytes || next < nread
-        break
+        loc = typecast(ifd(loc_loc),'uint64');
+        next = typecast(ifd(next_loc), 'uint64');
     end
-    
-    fread(f, next - loc - bytesPerStrip, 'uint8=>uint8');
-    ifd = fread(f, ifd_size, 'uint8=>uint8');
-    nread = next + ifd_size;
-    loc = typecast(ifd(loc_loc),'uint64');
-    next = typecast(ifd(next_loc), 'uint64');
+else
+
+    for i = 1:maxFrames
+        fread(f, loc-nread, 'uint8=>uint8'); %TODO: probably faster to use fseek?
+        image(:,:,i) = fread(f, [width, height], bitdepth_load);
+
+        if next > file_bytes || next < nread
+            break
+        end
+
+        fread(f, next - loc - bytesPerStrip, 'uint8=>uint8');
+        ifd = fread(f, ifd_size, 'uint8=>uint8');
+%         tags = reshape(ifd(9:end-8),20,[]);
+        nread = next + ifd_size;
+%         [desc, nread] = read_tag_from_pointer(f, tags(:,6), nread);
+        loc = typecast(ifd(loc_loc),'uint64');
+        next = typecast(ifd(next_loc), 'uint64');
+    end
 end
 
 image = reshape(image(:,:,1:i), width, height, nchans, []);
+if nargout > 3
+    ts= posixtime(datetime(epoch) + ts(1:nchans:i));
+end
     
 end
 
@@ -129,3 +164,17 @@ end
 % locs(3) <- the bit depth
 % locs(7) <- the byte offset, from the beginning of the file, to the image
 % locs(12:13) <- the byte offset of the xy-resolution, stored as a ratio
+
+
+
+%example ImageDescription tag:
+% frameNumbers = 1
+% acquisitionNumbers = 1
+% frameNumberAcquisition = 1
+% frameTimestamps_sec = 0.000000
+% acqTriggerTimestamps_sec = 0.000000
+% nextFileMarkerTimestamps_sec = 0.000000
+% endOfAcquisition = 0
+% endOfAcquisitionMode = 0
+% dcOverVoltage = 0
+% epoch = [2021,6,3,15,6,47.401]
