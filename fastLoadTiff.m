@@ -104,7 +104,7 @@ end
 
 image = reshape(image(:,:,1:i), width, height, nchans, []);
 if nargout > 3
-    ts= posixtime(datetime(epoch) + ts(1:nchans:i));
+    ts= posixtime(datetime(epoch) + seconds(ts(1:nchans:i)));
 end
     
 end
