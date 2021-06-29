@@ -1,4 +1,4 @@
-function [image,res,metadata,ts] = fastLoadTiff(file_name_and_path)
+function [image,res,metadata,ts,pos] = fastLoadTiff(file_name_and_path)
 
 f = fopen(file_name_and_path,'r');
 header = fread(f,16,'uint8=>uint8');
@@ -47,6 +47,8 @@ metadata = metadata';
 [~,tok,~] = regexp(metadata, 'SI.hChannels.channelSave = (\[[\d;]+\])','match','tokens','tokenExtents');
 nchans = length(str2num(tok{1}{1})); %#ok<ST2NM>
 
+[~,tok,~] = regexp(metadata, 'SI.hMotors.samplePosition = (\[[\-\d\.\s]+\])','match','tokens','tokenExtents');
+pos = str2num(tok{1}{1});
 %TODO: also consider SI.hStackManager.numSlices
 
 bytesPerFrame = bytesPerStrip + ifd_size;
