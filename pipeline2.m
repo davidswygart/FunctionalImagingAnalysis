@@ -1,5 +1,5 @@
 %% I/O
-file_name_and_path = '../060321B/nnos_mid_neg_00004.tif';
+file_name_and_path = 'E://MultiSMS/061821B/region2_cell3_00004.tif';
 [img, res] = fastLoadTiff(file_name_and_path);
 [ny,nx] = size(img,1,2);
 img = permute(img, [2, 1, 4, 3]);
@@ -29,9 +29,9 @@ map = fastCorrelationMap(reg_dc,0.9); %adapted from Suite2P paper
 %% Epoch windowing
 [on, off] = fastGetTriggerTime(img(:,:,:,end));
 off(end) = []; on(end) = []; %there's a light step at the end to kill the mean?
-dur = floor(min(off-on)/(nx*ny));
-all_E = reshape(reg_dc(:,:,round(on/(nx*ny)) + (-50:dur)), nx-1, ny, length(on), []);
-all_dFoF = (all_E - mean(all_E(:,:,:,1:50), 4)) ./ mean(all_E(:,:,:,1:50),4);
+% dur = floor(min(off-on)/(nx*ny));
+all_E = reshape(reg_dc(:,:,round(on/(nx*ny)) + (-8:32)), nx, ny, length(on), []);
+all_dFoF = (all_E - mean(all_E(:,:,:,1:8), 4)) ./ mean(all_E(:,:,:,1:8),4);
 
 
 %% Suppression index stuff
