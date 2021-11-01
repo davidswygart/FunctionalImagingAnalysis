@@ -88,12 +88,52 @@ classdef EpochImages
             if isempty(p.Results.ChannelNames)
                 ch = 1:sz(5);
             else
-                ch = ismember(obj.channelOrder, p.Results.ChannelNames);
+                [~,ch] = ismember(p.Results.ChannelNames,obj.channelOrder);
             end
 
             subImage = obj.img5D(:,:,p.Results.Frames,p.Results.Epochs,ch);
             subImage = obj.apply2DMask(subImage,p.Results.xyMask);
-        end    
+        end
+        
+        function [SNR, dFoF, avgStim, avgPre] = epochResponses(obj,varargin)
+            p = inputParser;
+            p.KeepUnmatched = true;
+            addParameter(p,'channel',"green");
+            addParameter(p,'ratioChannel',[]);
+            addParameter(p,'method','SNR'); % 'SNR', 'dF/F'
+            parse(p,varargin{:});
+            
+            
+            
+            chs = ["time",p.Results.channel,p.Results.ratioChannel]; %all channel names
+            img = obj.getSubImage(p.Unmatched,'ChannelNames',chs);
+            
+            t = img(:,:,:,:,1);
+            if isempty(p.Results.ratioChannel)
+                v = img(:,:,:,:,2);
+            else
+                v = img(:,:,:,:,2) ./ img(:,:,:,:,3); %divide by 3rd channel (red)
+            end
+            
+            preVals = v; %copy all values from analysis channel
+            preVals(t > 0) = nan; %nan out values that are not pre-Stim
+            avgPre = squeeze(mean(preVals,3,'omitnan')); %average accross frames (time) and squeeze out the time dimension
+            
+            stimVals = v; %copy all values from analysis channel
+            [~, stimTime] = obj.epochsByParam('stimTime');
+            stimInds = (t > 0) & (t < (stimTime / 1000));           
+            stimVals(~stimInds) = nan; %nan out values that are not StimTime
+            avgStim = squeeze(mean(stimVals,3,'omitnan')); %average accross frames (time) and squeeze out the time dimension
+            
+            stdStim = squeeze(std(stimVals,0,3,'omitnan'));           
+            dF = avgStim - avgPre;
+            
+            %if strcmp(p.Results.method,'SNR')
+                SNR = dF ./ stdStim;
+            %else if strcmp(p.Results.method,'dF/F')
+                dFoF = dF ./ avgPre;
+            %end               
+        end
         
         function image = apply2DMask(obj,image,mask)
             if ~isempty(mask)
@@ -119,7 +159,7 @@ classdef EpochImages
             xImg = obj.getSubImage(p.Unmatched,'ChannelNames',p.Results.channelX);
             yImg = obj.getSubImage(p.Unmatched,'ChannelNames',p.Results.channelY);
 
-%             binscatter(xImg(:),yImg(:), 240)
+%           binscatter(xImg(:),yImg(:), 240)
 
 
             x_all = xImg(~isnan(xImg));

@@ -1,5 +1,7 @@
 classdef EpochResponses
     properties
+        cellName
+        dataSetName
         img
         dimensions = ['lines (Y)','columns (X)','Epochs'];
         figMap = containers.Map({'blank'}, 1:1);
@@ -9,6 +11,9 @@ classdef EpochResponses
     methods (Hidden = true) %% Building functions
         function obj = EpochResponses(img, cellName, dataSetName)       
            % Set image properties
+           obj.img = img;
+           obj.cellName = cellName;
+           obj.dataSetName = dataSetName;
         end
     end
     methods
