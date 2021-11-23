@@ -44,7 +44,7 @@ next_loc = ifd_size-7 : ifd_size;
 % [info, nread] = read_tag_from_pointer(f, tags(:,17), nread); %rois
 [metadata, nread] = read_tag_from_pointer(f, tags(:,16), nread); %SI state
 metadata = metadata';
-[~,tok,~] = regexp(metadata, 'SI.hChannels.channelSave = (\[[\d;*\s+]+\])','match','tokens','tokenExtents');
+[~,tok,~] = regexp(metadata, 'SI.hChannels.channelSave = (\[?[\d;*\s+]+\]?)','match','tokens','tokenExtents');
 nchans = length(str2num(tok{1}{1})); %#ok<ST2NM>
 
 [~,tok,~] = regexp(metadata, 'SI.hMotors.samplePosition = (\[[\-\d\.\s]+\])','match','tokens','tokenExtents');
