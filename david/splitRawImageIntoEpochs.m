@@ -1,11 +1,11 @@
-function eImg = splitRawImageIntoEpochs(raw)
+function eImg = splitRawImageIntoEpochs(raw, preTime,stimTime,tailTime)
 %% find epoch start from stimulus channel
 [on, off] = detectStimInds(raw.stim, raw.isBi);
 numOn = size(on,1);
 
 %%  create epoch image (nrows, nColumns, nTframes, nEpochs) EpochImage & EpochTimes
-nPreFram = ceil(1 * raw.framRat);
-nPostFram = ceil(2 * raw.framRat);
+nPreFram = ceil(preTime * raw.framRat);
+nPostFram = ceil((stimTime+tailTime) * raw.framRat);
 nTotalFram = nPreFram+nPostFram+1;
 
 eImg = struct;

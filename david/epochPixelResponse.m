@@ -1,9 +1,9 @@
-function r = epochPixelResponse(green, time)
+function r = epochPixelResponse(green, time, stimLength)
 %calculate the response for each pixel for each epoch
 
 %% indicate pre and stim times
 isPre = time < 0;
-isStim = time > 0 & time < 1;
+isStim = time > 0 & time < stimLength;
 
 %% calculate pre-time values for each epoch
 temp = green;

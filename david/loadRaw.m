@@ -1,4 +1,4 @@
-path = 'C:\Users\david\Desktop\2p_copies';
+%path = 'C:\Users\david\Desktop\2p_copies';
 
 %% load the raw image and metadata
 [tempImg, raw.res, raw.md, ~,raw.position] = fastLoadTiff([path filesep image]); %not using timestamps
