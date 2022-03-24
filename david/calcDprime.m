@@ -1,4 +1,4 @@
-function dprime = calcDprime(si,err)
+function [dprime, difs] = calcDprime(si,err)
 si = si(:);
 err = err(:);
 
@@ -8,5 +8,7 @@ avgErr = (err + err') / 2;
 dprime = d ./ avgErr;
 
 isU = logical(tril(ones(size(dprime)),-1));
+
+difs = d(isU);
 dprime = dprime(isU);
 end

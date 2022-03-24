@@ -1,4 +1,4 @@
-function [dF_SI, dFoF_SI] = calcSi_dFEpochs(smallG, bigG, smallT, bigT)
+function [dF_SI, dFoF_SI] = calcRatio_everyEpoch(smallG, bigG, smallT, bigT)
 %% average accross time for each epoch
 [smallGPre, smallGStim] = pullPreStim(smallG,smallT);
 smallGPre = squeeze(mean(smallGPre, 3, 'omitnan'));
@@ -15,18 +15,11 @@ dF_big = bigGStim - bigGPre;
 dFoF_small = dF_small ./ smallGPre;
 dFoF_big = dF_big ./ bigGPre;
 
-
-%% average responses accross epochs
-dF_small = median(dF_small,3);
-dF_big = median(dF_big,3);
-
-dFoF_small = median(dFoF_small,3);
-dFoF_big = median(dFoF_big,3);
-
 %% calculate SI
-dF_SI = (dF_small - dF_big) ./ (dF_small + dF_big);
-dFoF_SI = (dFoF_small - dFoF_big) ./ (dFoF_small + dFoF_big);
+dF_SI = 1 - dF_big ./ dF_small;
+dFoF_SI = 1 - dFoF_big ./ dFoF_small;
 
-
-
+%% average SI accross epochs
+dF_SI = median(dF_SI,3);
+dFoF_SI = median(dFoF_SI,3);
 end

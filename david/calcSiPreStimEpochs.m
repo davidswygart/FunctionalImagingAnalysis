@@ -10,11 +10,11 @@ bigGPre = squeeze(mean(bigGPre, 3, 'omitnan'));
 bigGStim = squeeze(mean(bigGStim, 3, 'omitnan'));
 
 %% average Epochs together
-smallGPre = squeeze(mean(smallGPre, 3, 'omitnan'));
-smallGStim = squeeze(mean(smallGStim, 3, 'omitnan'));
+smallGPre = squeeze(median(smallGPre, 3, 'omitnan'));
+smallGStim = squeeze(median(smallGStim, 3, 'omitnan'));
 
-bigGPre = squeeze(mean(bigGPre, 3, 'omitnan'));
-bigGStim = squeeze(mean(bigGStim, 3, 'omitnan'));
+bigGPre = squeeze(median(bigGPre, 3, 'omitnan'));
+bigGStim = squeeze(median(bigGStim, 3, 'omitnan'));
 
 %% calculate SI
 

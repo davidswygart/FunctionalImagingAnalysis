@@ -1,15 +1,22 @@
-function eImg = splitRawImageIntoEpochs(raw)
+function eImg = splitRawImageIntoEpochs2(stim, green, metaData, range)
 %% find epoch start from stimulus channel
-[on, off] = detectStimInds(raw.stim, raw.isBi);
+[on, off] = detectStimInds(stim, metaData.SI.hScan2D.bidirectional);
 numOn = size(on,1);
 
+%% make a time image
+rawTime = createTimeImage2(size(stim), metaData);
+
 %%  create epoch image (nrows, nColumns, nTframes, nEpochs) EpochImage & EpochTimes
-nPreFram = ceil(1 * raw.framRat);
-nPostFram = ceil(2 * raw.framRat);
+framRat = metaData.SI.hRoiManager.scanFrameRate;
+
+nPreFram = ceil(-1*range(1) * framRat);
+nPostFram = ceil(range(2) * framRat);
 nTotalFram = nPreFram+nPostFram+1;
 
+[nRow,nCol,~] = size(green);
+
 eImg = struct;
-eImg.green = nan(raw.nRow, raw.nCol, nTotalFram, numOn);
+eImg.green = nan(nRow, nCol, nTotalFram, numOn);
 eImg.time = eImg.green;
 eImg.stim = eImg.green;
 eImg.start = nan(1,1,1,numOn);
@@ -19,12 +26,12 @@ for en = 1:numOn
     f = on(en,3); 
     framInds = (f-nPreFram):(f+nPostFram);
     
-    eImg.green(:,:,:,en) = raw.green(:,:,framInds);
-    eImg.stim(:,:,:,en) = raw.stim(:,:,framInds);
+    eImg.green(:,:,:,en) = green(:,:,framInds);
+    eImg.stim(:,:,:,en) = stim(:,:,framInds);
     
-    time = raw.time(:,:,framInds);
+    time = rawTime(:,:,framInds);
     eImg.start(en) = time(1);
-    eImg.time(:,:,:,en) = time - raw.time(r,c,f);
+    eImg.time(:,:,:,en) = time - rawTime(r,c,f);
 end
 
 %% plot avg stim to verify the epochs were split correctly

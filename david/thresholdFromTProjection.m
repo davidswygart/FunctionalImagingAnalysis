@@ -16,11 +16,14 @@ subplot(2,1,1);
 imagesc(tProj)
 colorbar
 axis image;
-title('time projection')
+title('Intensity Projection through time')
 
 subplot(2,1,2);
 imagesc(tProj, 'AlphaData', meetsThresh)
 colorbar
 axis image;
-title('thresholded tProjection')
+title(['Meets Threshold ', num2str(p)])
+
+
+xlabel(['Number of pixels included = ', num2str(sum(meetsThresh(:)))])
 end

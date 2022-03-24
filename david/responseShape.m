@@ -65,7 +65,7 @@ plot([0 0], ylim, '--k')
 plot([1 1], ylim, '--k')
 legend(num2str(uSpots))
 
-saveas(gcf,[image,'_responseProfile.png'])
+%saveas(gcf,[image,'_responseProfile.png'])
 
 %% determine the best spot
 dF = nan(length(allTime),1);

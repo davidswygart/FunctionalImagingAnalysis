@@ -1,4 +1,4 @@
-%path = 'C:\Users\david\Desktop\2p_copies';
+path = 'C:\Users\david\Desktop\2p_copies';
 
 %% load the raw image and metadata
 [tempImg, raw.res, raw.md, ~,raw.position] = fastLoadTiff([path filesep image]); %not using timestamps
@@ -32,8 +32,8 @@ raw.green(raw.green < 0) = 0;
 
 %% Set the end pixels to 0 (artifact) -> applied to both green and threshold channels
 if linescan == 'y'
-    raw.green(end,:,:) = 0;
-    raw.thresh(end,:,:) = 0;
+    raw.green([1,2,3,end],:,:) = 0;
+    raw.thresh([1,2,3,end],:,:) = 0;
 else
     raw.green(:,[1,end],:) = 0;
     raw.thresh(:,[1,end],:) = 0;

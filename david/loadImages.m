@@ -12,6 +12,7 @@ linescan = 'x';
  %%
 cellName = '021022Bc2.mat';
 dataSetName = 'SpotsMultiSize_img1';
+%dataSetName = 'SpotsMultiSize_img2';
 image = '021022Bc2_1.tif';
 gChannel = 2;
 stimChannel = 4;
@@ -62,7 +63,7 @@ stimChannel = 3;
 threshChannel = gChannel;
 minMaxTime = [40 inf];
 linescan = 'y';
-nullError_andRealSI
+
 %%
 cellName = 'none';
 dataSetName = 'none';
@@ -73,7 +74,7 @@ stimChannel = 3;
 threshChannel = gChannel;
 minMaxTime = [0 inf];
 linescan = 'y';
-nullError_andRealSI
+
 %%
 cellName = 'none';
 dataSetName = 'none';
@@ -84,7 +85,7 @@ stimChannel = 3;
 threshChannel = gChannel;
 minMaxTime = [0 inf];
 linescan = 'y';
-nullError_andRealSI
+
 %%
 cellName = 'none';
 dataSetName = 'none';
@@ -95,7 +96,7 @@ stimChannel = 3;
 threshChannel = gChannel;
 minMaxTime = [120 inf];
 linescan = 'y';
-nullError_andRealSI
+
 %%
 cellName = 'none';
 dataSetName = 'none';
@@ -105,7 +106,7 @@ threshChannel = gChannel;
 stimChannel = 3;
 minMaxTime = [0 inf];
 linescan = 'y';
-nullError_andRealSI
+
 %%
 cellName = 'none';
 dataSetName = 'none';
@@ -115,7 +116,7 @@ threshChannel = gChannel;
 stimChannel = 3;
 minMaxTime = [200 inf];
 linescan = 'y';
-nullError_andRealSI
+%ShuffleEpochs
 %%%%%%%%%%%%%%%%% 03/04/21 %%%%%%%%%%%%%%%%%
 %%
 cellName = 'none';
@@ -127,4 +128,3 @@ stimChannel = 4;
 threshChannel = 2;
 minMaxTime = [0 inf];
 linescan = 'y';
-nullError_andRealSI

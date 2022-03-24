@@ -38,9 +38,7 @@ function [onInd, offInd] = detectStimInds(stim, isBi)
     on(diff(on) < npixInFrame) = [];% throw away ones that occur within 1 frame of the previous detection
     off(diff(off) < npixInFrame) = [];% throw away ones that occur within 1 frame of the previous detection
     
-%     plot(linImg)
-%     scatter(on,linImg(on))
-%     scatter(off,linImg(off))
+
     
     %% Error checking
     if length(on) > length(off)
@@ -60,7 +58,10 @@ function [onInd, offInd] = detectStimInds(stim, isBi)
         warning('The difference between onset and offset of an epoch is less than a single frame')
     end
     
-
+%     hold on
+%     plot(linImg,'k')
+%     scatter(on,linImg(on))
+%     scatter(off,linImg(off))
     
     %%
     [c,r,z] = ind2sub([nC, nR, nZ], on);
