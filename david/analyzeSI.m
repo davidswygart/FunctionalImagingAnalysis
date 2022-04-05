@@ -12,11 +12,11 @@ siArray = reshape(allSI,[],ne);
 tInd = find(threshArray > threshVal);
 
 siArray = siArray(tInd,:);
-siMed = median(siArray,2);
+siMed = median(siArray,2, 'omitnan');
 %% shuffle si values accross epochs
 numPerm = 500;
 siShuf = repmat(siArray,1,1,numPerm);
 siShuf = Shuffle(siShuf,1);
-medShufSI = squeeze(median(siShuf,2));
+medShufSI = squeeze(median(siShuf,2, 'omitnan'));
 
 end

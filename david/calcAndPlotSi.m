@@ -1,7 +1,7 @@
 function [medSI,allSI] = calcAndPlotSi(small,big, varargin)
 %% calculate si
 allSI = big ./ small;
-medSI = median(allSI,3);
+medSI = median(allSI,3, 'omitnan');
 
 
 if ~isempty(varargin) % plot SI

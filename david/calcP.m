@@ -1,5 +1,7 @@
 function p = calcP(real,shuf,direction)
 
+shuf(isnan(shuf)) = [];
+
 if strcmp(direction,'smaller')
     p = mean(real > shuf);
 elseif strcmp(direction,'bigger')

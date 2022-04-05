@@ -16,15 +16,35 @@ nTotalFram = nPreFram+nPostFram+1;
 [nRow,nCol,~] = size(green);
 
 eImg = struct;
-eImg.green = nan(nRow, nCol, nTotalFram, numOn);
+
+
+frameStart = on(:,3) - nPreFram;
+frameEnd = on(:,3) + nPostFram;
+
+if frameStart(1) < 0
+    warning('The first image epoch occurs earlier than the pretime length.  Removing this epoch.')
+    frameEnd(frameStart < 0) = [];
+    frameStart(frameStart < 0) = [];
+end
+
+if frameEnd(end) > size(green,3)
+    warning('The last image epoch postime extends beyond the imaging time.  Removing this epoch.')
+    frameStart(frameEnd > size(green,3)) = [];
+    frameEnd(frameEnd > size(green,3)) = [];
+end
+
+ne = length(frameStart);
+
+eImg.green = nan(nRow, nCol, nTotalFram, ne);
 eImg.time = eImg.green;
 eImg.stim = eImg.green;
-eImg.start = nan(1,1,1,numOn);
-for en = 1:numOn       
+eImg.start = nan(1,1,1,ne);
+
+for en = 1:ne       
     r = on(en,1);
     c = on(en,2);
     f = on(en,3); 
-    framInds = (f-nPreFram):(f+nPostFram);
+    framInds = frameStart(en):frameEnd(en);
     
     eImg.green(:,:,:,en) = green(:,:,framInds);
     eImg.stim(:,:,:,en) = stim(:,:,framInds);
