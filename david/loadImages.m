@@ -9,7 +9,7 @@ threshChannel = gChannel;
 minMaxTime = [480 600];
 linescan = 'x';
 newPip
-Pip3
+
  %%
 cellName = '021022Bc2.mat';
 dataSetName = 'SpotsMultiSize_img1';
@@ -21,7 +21,7 @@ threshChannel = gChannel;
 minMaxTime = [100 400];
 linescan = 'x';
 newPip
-Pip3
+
 %%%%%%%%%%%%%%%%% 10/21/21 %%%%%%%%%%%%%%%%%
 %%
 cellName = '102121Bc1.mat';
@@ -44,7 +44,7 @@ threshChannel = 2;
 minMaxTime = [100 800];
 linescan = 'x';
 newPip
-Pip3
+
 %%%%%%%%%%%%%%%%% 03/17/21 %%%%%%%%%%%%%%%%%
 %%
 cellName = '031721Bc4';
@@ -105,7 +105,7 @@ threshChannel = gChannel;
 minMaxTime = [120 inf];
 linescan = 'y';
 newPip
-Pip3
+
 %%
 cellName = '031721Bc9';
 dataSetName = 'SpotsMultiSize';

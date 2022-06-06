@@ -20,7 +20,9 @@ end
 % roi = mean(eImg.green(:,2:end-1,:,:),[1,2], 'omitnan');
 % roiT = mean(eImg.time(:,2:end-1,:,:),[1,2], 'omitnan');
 
-eResp = epochPixelResponse(roi,roiT);
+%eResp = epochPixelResponse(roi,roiT);
+imagesc(squeeze(mean(eResp.dF,3)))
+colorbar
 %% Indicate which epochs are good
 epochStart = squeeze(eImg.start);
 isGoodEpoch = epochStart > minMaxTime(1) & epochStart < minMaxTime(2);
