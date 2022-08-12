@@ -1,17 +1,17 @@
 %% I/O
 region = 1;
 input_path = 'E://MultiSMS/080421B/region%d_%05d.tif';
-output_path = sprintf('E://MultiSMS/080421B/region%da', region);
+output_path = sprintf('E://MultiSMS/080421B/region%d', region);
 cell_data = 'E:\MultiSMS\080421Bc4.mat';
 h5_data = 'E:\MultiSMS\080421B.h5';
 img = [];
 ts=[];
-saving = true;
-spiking = true;
+saving = false;
+spiking = 7; %roi number of the spiking cell, or false if no spiking cells
 %region 2: [1,2] [3,4,5,6,7,8] [,9]
 %TODO: group by sf, img size.... X.X
 for i=2
-    [timg, res, md, tts,pos] = fastLoadTiff(sprintf(input_path,region,i));
+    [timg, res, md, ~, tts,pos] = fastLoadTiff(sprintf(input_path,region,i));
     [ny,nx] = size(timg,1,2);
     img = cat(3,img, permute(timg, [2, 1, 4, 3]));
     ts=cat(2,ts,tts);
@@ -26,7 +26,7 @@ if spiking
 end
 % [~,ei] = min(abs(ts(ceil(on./(nx*ny)))' - [e(:).t0]), [], 2);
 trigTime = posixtime(datetime([e(:).t0],'convertfrom','posixtime') + milliseconds([e(:).preTime]))';
-delta = ts(ceil(on./(nx*ny))+1) - trigTime;
+delta = ts(ceil(on./(nx*ny))+1)' - trigTime;
 delta(abs(delta) > 1/sf) = inf;
 rm = all(isinf(delta),1);
 [~,ei] = min(delta,[],1);
@@ -242,9 +242,9 @@ if saving
             hexTrace(spots(ii,:), att(ii,:), [mp mp+sf]); %???
             axis off;
             hold on;
-            plot(loc(:,2),-loc(:,1),'g');
+%             plot(loc(:,2),-loc(:,1),'g');
             title(sprintf('ROI %02d, Spot diameter = %.2f\\mum',roi,sizes(i)))
-            print(sprintf('%s/rois/traces/roi_%02d_size_%02d',output_path,roi,i),'-dpng');
+%             print(sprintf('%s/rois/traces/roi_%02d_size_%02d',output_path,roi,i),'-dpng');
             
         end
     end
@@ -253,7 +253,7 @@ end
 if spiking && saving
     
     mkdir(sprintf('%s/rasters',output_path));
-    roi = 7; %index of the ROI to associate with spikes
+    roi = spiking; %index of the ROI to associate with spikes
     figure('units','normalized','position',[0,0,1,1]);clf;set(gcf,'color','w');
     spots = [[e(ei).offsetX] + [e(ei).cx]; [e(ei).offsetY] + [e(ei).cy]; e(ei).curSpotSize]';
     [ai, x, y, spotSize] = findgroups(spots(:,1), spots(:,2), spots(:,3));

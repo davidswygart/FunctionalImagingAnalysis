@@ -1,5 +1,14 @@
-function [image,res,metadata,ts,pos] = fastLoadTiff(file_name_and_path)
-%TODO: extract actualStackZStepSize
+function [image,res,metadata,zs,ts,pos] = fastLoadTiff(file_name_and_path)
+% [image,res,metadata,ts,zs,pos] = FASTLOADTIFF(file_name_and_path)
+% IMAGE : the raw image [nx -by- ny -by- nc -by- nr -by- nz -by- nt]
+% RES : (x,y,z) resolution in microns
+% METADATA : the full SI metadata string, which can be converted into a
+%   struct using eval()
+% ZS : the actual z position of each frame, in microns [nr -by- nz -by- nt]
+% TS : the actual time stamp of each frame, in seconds [nr -by- nz -by- nt]
+% POS : starting (x,y,z) position of the stage, in microns
+% NOTE: only works on raw scanimage files
+
 f = fopen(file_name_and_path,'r');
 header = fread(f,16,'uint8=>uint8');
 
@@ -36,6 +45,7 @@ loc = typecast(tags(13:end,7),'uint64');
 res = double(typecast(reshape(tags(13:end,12:13),[],1),'uint32'));
 res = [res(2)/res(1) res(4)/res(3)] * 1e4; %in microns
 
+
 loc_loc = (8 + 20*6 + 13):(8 + 20*6 + 13 + 7); %should be 141:148
 next_loc = ifd_size-7 : ifd_size;
 
@@ -44,18 +54,56 @@ next_loc = ifd_size-7 : ifd_size;
 % [info, nread] = read_tag_from_pointer(f, tags(:,17), nread); %rois
 [metadata, nread] = read_tag_from_pointer(f, tags(:,16), nread); %SI state
 metadata = metadata';
-[~,tok,~] = regexp(metadata, 'SI.hChannels.channelSave = (\[?[\d;*\s+]+\]?)','match','tokens','tokenExtents');
+[~,tok,~] = regexp(metadata, 'SI.hChannels.channelSave = ([^\n\r]+)','match','tokens','tokenExtents');
 nchans = length(str2num(tok{1}{1})); %#ok<ST2NM>
 
-[~,tok,~] = regexp(metadata, 'SI.hMotors.samplePosition = (\[[\-\d\.\s]+\])','match','tokens','tokenExtents');
-pos = str2num(tok{1}{1});
-%TODO: also consider SI.hStackManager.numSlices
+[~,tok,~] = regexp(metadata, 'SI.hMotors.samplePosition = ([^\n\r]+)','match','tokens','tokenExtents');
+pos = str2num(tok{1}{1}); %#ok<ST2NM>
+%TODO: check the starting galvo position, and adjust pos so that it always
+%refers to the same pixel (either center or top left of the image)
+
+[~,tok,~] = regexp(metadata, 'SI.hStackManager.actualNumSlices = ([^\n\r]+)','match','tokens','tokenExtents');
+nSlices = str2double(tok{1}{1});
+
+%TODO: whats the deal with "zsAllActuators"?
+[~,tok,~] = regexp(metadata, 'SI.hStackManager.zs = ([^\n\r]+)','match','tokens','tokenExtents');
+zs = reshape(str2num(tok{1}{1}),[],1); %#ok<ST2NM>
+
+if nSlices > 1
+% [~,tok,~] = regexp(metadata, 'SI.hStackManager.actualStackZStepSize = ([^\n\r]+)','match','tokens','tokenExtents');
+% res(3) = abs(str2double(tok{1}{1}));
+
+[~,tok,~] = regexp(metadata, 'SI.hStackManager.stackZStartPos = ([^\n\r]+)','match','tokens','tokenExtents');
+start = reshape(str2num(tok{1}{1}),[],1); %#ok<ST2NM>
+
+[~,tok,~] = regexp(metadata, 'SI.hStackManager.stackZEndPos = ([^\n\r]+)','match','tokens','tokenExtents');
+fin = reshape(str2num(tok{1}{1}),[],1); %#ok<ST2NM>
+
+res(3) = abs(fin - start) / nSlices;
+else 
+    res(3) = nan;
+end
+
+[~,tok,~] = regexp(metadata, 'SI.hStackManager.framesPerSlice = ([^\n\r]+)','match','tokens','tokenExtents');
+nReps = str2double(tok{1}{1});
+nVols = [];
+if nReps == Inf
+    nReps = [];
+    nVols = 1;
+    nPer = nchans * nSlices * nVols;
+else
+    nPer = nchans * nSlices * nReps;
+end
+
+%TODO: correct for case where image is taken upside down? Would probably
+%get the sign of the step size and then flip image along the z axis...
+
 
 bytesPerFrame = bytesPerStrip + ifd_size;
 
 file_bytes = dir(file_name_and_path).bytes;
 maxFrames = floor((file_bytes-nread)/ bytesPerFrame);
-image = zeros(width,height,maxFrames,bitdepth_str);
+image = zeros(width,height,maxFrames,bitdepth_str); %TODO: uninit
 
 if nargout>3
     ts = zeros(1,maxFrames);
@@ -104,9 +152,23 @@ else
     end
 end
 
-image = reshape(image(:,:,1:i), width, height, nchans, []);
+if mod(i, nPer) ~= 0
+   if nSlices == 1 && isempty(nVols) %this is okay
+        nReps = i/nchans; % floor division, because i is uint64
+   end
+end
+%TODO: will error if imaging did not run to completion except above case
+
+image = reshape(image(:,:,1:i), width, height, nchans, nReps, nSlices, nVols);
 if nargout > 3
-    ts= posixtime(datetime(epoch) + seconds(ts(1:nchans:i)));
+    ts = reshape(posixtime(datetime(epoch) + seconds(ts(1:nchans:i))), nReps, nSlices, nVols);
+    if nargout > 4 
+        if numel(zs) == 1  %only 1 slice
+            zs = repmat(zs,size(ts));
+        else 
+            zs = reshape(zs, nReps, nSlices, nVols);
+        end
+    end
 end
     
 end
@@ -131,13 +193,13 @@ function [tag_data, nread] =read_tag_from_pointer(f, tag, nread)
             read_str = 'uint64=>uint64';
             rat = true;
         case 16
-            read_str = 'uint64=>unit64';
+            read_str = 'uint64=>uint64';
     end
     
     tag_data = fread(f, count, read_str);
     
     if rat
-        error('need to define behavior for rationals');
+        error('TODO: need to define behavior for rationals');
     end
 
     nread = loc + count;
