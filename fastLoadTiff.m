@@ -12,12 +12,12 @@ function [image,res,metadata,zs,ts,pos] = fastLoadTiff(file_name_and_path)
 f = fopen(file_name_and_path,'r');
 header = fread(f,16,'uint8=>uint8');
 
-if ~all(header(1:2) == [0x49;0x49])
+if ~all(header(1:2) == uint8([73;73]))
     fclose(f);
     error('File is not saved in little endian order!!');
     %all the bytes are flipped around and need to be reversed!
 end
-if ~all(header(3:4) == [0x2B;0x00]) || typecast(header(5:8), 'uint32') ~=8
+if ~all(header(3:4) == uint8([43;0])) || typecast(header(5:8), 'uint32') ~=8
     fclose(f);
     error('File is not a valid bigTIFF!');
 end
@@ -101,7 +101,8 @@ end
 
 bytesPerFrame = bytesPerStrip + ifd_size;
 
-file_bytes = dir(file_name_and_path).bytes;
+file_struct = dir(file_name_and_path);
+file_bytes = file_struct.bytes;
 maxFrames = floor((file_bytes-nread)/ bytesPerFrame);
 image = zeros(width,height,maxFrames,bitdepth_str); %TODO: uninit
 
