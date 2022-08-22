@@ -24,28 +24,28 @@ siN_mad = mad(nullDf2 ./ nullDf1, 1,3);
 % imagesc(siN_mad)
 % colorbar
 % caxis([0,2])
-%% correlations to Null data
-correlations = [
-corNan(siN,smallSNR)
-corNan(siN,smallDfof)
-corNan(siN,median(smallDf,3))
-corNan(siN,rawG)
-corNan(siN,siN_mad)];
-
-X = categorical({'SNR','dF/F','dF','raw','si MAD'});
-X = reordercats(X,{'SNR','dF/F','dF','raw','si MAD'});
-
-
-%% Null 1 p values (using smallSNR)
-figure(8)
-[p,v,tVals,pixPerc] = pByThresh(nullDf1, nullDf2, siN);
-title('Null 1: using si null')
-%saveas(gcf,[image,'_10_Null_SNR.png'])
-%% Null of real values (using smallSNR)
-figure(9)
-[p,v,tVals,pixPerc] = pByThresh(smallDf, bigDf, siN);
-title('real: using si null')
-%saveas(gcf,[image,'_11_Real_SNR.png'])
+% %% correlations to Null data
+% correlations = [
+% corNan(siN,smallSNR)
+% corNan(siN,smallDfof)
+% corNan(siN,median(smallDf,3))
+% corNan(siN,rawG)
+% corNan(siN,siN_mad)];
+% 
+% X = categorical({'SNR','dF/F','dF','raw','si MAD'});
+% X = reordercats(X,{'SNR','dF/F','dF','raw','si MAD'});
+% 
+% 
+% %% Null 1 p values (using smallSNR)
+% figure(8)
+% [p,v,tVals,pixPerc] = pByThresh(nullDf1, nullDf2, siN);
+% title('Null 1: using si null')
+% %saveas(gcf,[image,'_10_Null_SNR.png'])
+% %% Null of real values (using smallSNR)
+% figure(9)
+% [p,v,tVals,pixPerc] = pByThresh(smallDf, bigDf, siN);
+% title('real: using si null')
+% %saveas(gcf,[image,'_11_Real_SNR.png'])
 
 
 % figure(7)

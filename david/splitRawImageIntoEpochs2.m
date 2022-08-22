@@ -55,6 +55,7 @@ for en = 1:ne
 end
 
 %% plot avg stim to verify the epochs were split correctly
+figure(1111)
 clf
 plot(squeeze(mean(eImg.time, [1,2,4])), squeeze(mean(eImg.stim, [1,2,4])))
 %plot(squeeze(mean(epochs.time, [1,2,4])), squeeze(mean(epochs.green, [1,2,4])))
