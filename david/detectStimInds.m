@@ -58,10 +58,12 @@ function [onInd, offInd] = detectStimInds(stim, isBi)
         warning('The difference between onset and offset of an epoch is less than a single frame')
     end
     
-%     hold on
-%     plot(linImg,'k')
-%     scatter(on,linImg(on))
-%     scatter(off,linImg(off))
+    figure(11111)
+    clf
+    hold on
+    plot(linImg,'k')
+    scatter(on,linImg(on))
+    scatter(off,linImg(off))
     
     %%
     [c,r,z] = ind2sub([nC, nR, nZ], on);
