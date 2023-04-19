@@ -476,15 +476,18 @@ def do_registration(raw_data_file, stack_file, out_path, props):
     #todo...
     register.register(raw_data_file, stack_file, out_path, props=props, make_gif=True)
 
-def segment(bin_path, props, events, mask_file, dark_file, func_channel = 1):
+def segment(bin_path, props, events, mask_file, dark_file, func_channel = 1, data = None):
     '''
     '''
     # if stim_type is None:
     #     stim_type = np.empty_like(stim_timing.T) * np.nan
 
-    #TODO: this assumes the same data shape as the movie...
+    #TODO: this assumes the same data shape as the movie... easy enough to fix
     dark_level = suite2p.io.tiff.ScanImageTiffReader(dark_file).data().reshape(-1,props['n_channels'],*props['frame_shape'])[:,func_channel,:,:].flatten().mean()
-    data = suite2p.io.BinaryRWFile(*props['frame_shape'], os.path.join(bin_path,'functional.bin')).data
+    
+    if data is None:
+        data = suite2p.io.BinaryRWFile(*props['frame_shape'], os.path.join(bin_path,'functional.bin')).data
+
     
     if type(mask_file) == str:
         mask = suite2p.io.tiff.open_tiff(mask_file, True)[0].pages[0].asarray()
@@ -524,7 +527,7 @@ def segment(bin_path, props, events, mask_file, dark_file, func_channel = 1):
         fluor = np.empty(n_obs),                    #the raw fluorescence value
         t = np.empty(n_obs),                        #time since the start of the recording
         trial_t = np.empty(n_obs),                  #time since the start of the trial
-        frame_t = np.empty(n_obs),                  #time since the start of the projector frame
+        # frame_t = np.empty(n_obs),                  #time since the start of the projector frame
         x = np.empty(n_obs),                        #x position in reference stack coordinates
         y = np.empty(n_obs),                        #y position in reference stack coordinates
         col = np.empty(n_obs, dtype=np.uint16),     #x position in movie coordinates 
@@ -544,7 +547,7 @@ def segment(bin_path, props, events, mask_file, dark_file, func_channel = 1):
 
         df_raw.loc[trial_out,'t'] = tt[trial_in]
         df_raw.loc[trial_out,'trial_t'] = tt[trial_in] - tt[epoch.stim_on]
-        df_raw.loc[trial_out, 'frame_t'] = tt[trial_in] - tt[props['flip_index'][trial_in]]
+        # df_raw.loc[trial_out, 'frame_t'] = tt[trial_in] - tt[props['flips'][trial_in]] #this isn't even right?
 
         df_raw.loc[trial_out,'col'] = xt[trial_in]
         df_raw.loc[trial_out,'line'] = yt[trial_in]
@@ -554,25 +557,29 @@ def segment(bin_path, props, events, mask_file, dark_file, func_channel = 1):
 
         df_raw.loc[trial_out,'trial'] = epoch.Index     
 
-        df_raw.loc[trial_out,'x'] = reg_x[trial_in]
-        df_raw.loc[trial_out,'y'] = reg_y[trial_in]        
+        # df_raw.loc[trial_out,'x'] = reg_x[trial_in]
+        # df_raw.loc[trial_out,'y'] = reg_y[trial_in]
+        df_raw.loc[trial_out,'x'] = reg_x[np.ravel_multi_index((ft[trial_in], yt[trial_in], xt[trial_in]), (len(reg_x), *props['frame_shape']))]
+        df_raw.loc[trial_out,'y'] = reg_y[np.ravel_multi_index((ft[trial_in], yt[trial_in], xt[trial_in]), (len(reg_y), *props['frame_shape']))]    
 
         N += trial_pts
 
-    df_raw.set_index('t', inplace=True) #NOTE: this assumes that there are no overlapping pre- and tail- times
-    
-    df_raw.drop(df_raw['x']<=-0.5, inplace=True)
-    df_raw.drop(df_raw['y']<=-0.5, inplace=True)
-    df_raw.drop(df_raw['x'] >= mask.shape[1] + 0.5, inplace=True)
-    df_raw.drop(df_raw['y'] >= mask.shape[0] + 0.5, inplace=True)
-    
+    df_raw.set_index('t', inplace=True) #NOTE: this assumes that there are no overlapping pre- and tail- times?
 
-    #TODO: this doesn't respect the registration. should use x/y once those are sorted out
-    df_raw.loc[:,'roi'] = mask[np.ravel_multi_index((np.round(df_raw['y']).astype(int),np.round(df_raw['x']).astype(int)), *mask.shape)]
-    df_raw.drop(df_raw['roi'] == 0, inplace=True)
+    df_raw.drop(df_raw.index[df_raw.x <= -0.5], inplace=True)
+    df_raw.drop(df_raw.index[df_raw.y <= -0.5], inplace=True)
+    df_raw.drop(df_raw.index[df_raw.x >= mask.shape[1] - 0.5], inplace=True)
+    df_raw.drop(df_raw.index[df_raw.y >= mask.shape[0] - 0.5], inplace=True)
 
-    df_raw.loc['baseline_fluor'] = df_raw.groupby(['trial','roi']).apply(lambda x: x[x['trial_t']<0]['fluor'].mean())
-    df_raw.loc['dFoF'] = df_raw.apply(lambda x: (x['fluor'] - x['baseline_fluor'])/x['baseline_fluor'], axis=1)
+    df_raw.loc[:,'roi'] = mask.flat[np.ravel_multi_index((np.round(df_raw['y']).astype(int),np.round(df_raw['x']).astype(int)), mask.shape)]
+    df_raw.drop(df_raw.index[df_raw.roi == 0], inplace=True)
+
+    # df_raw.loc[:,'baseline_fluor'] = df_raw.groupby(['trial','roi']).transform(lambda x: x[x['trial_t']<0]['fluor'].mean())
+    
+    tmp = df_raw.groupby(['trial','roi']).apply(lambda x: pd.Series({'baseline_fluor':x[x['trial_t']<0]['fluor'].mean()}))
+    df_raw.loc[:,'baseline_fluor'] = df_raw[['trial','roi']].join(tmp, on=['trial','roi'])['baseline_fluor']
+    
+    df_raw.loc[:,'dFoF'] = df_raw.apply(lambda x: (x['fluor'] - x['baseline_fluor'])/x['baseline_fluor'], axis=1)
 
     return df_raw
 
