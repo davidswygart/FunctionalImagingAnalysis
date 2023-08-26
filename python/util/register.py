@@ -55,7 +55,13 @@ def registration_wrapper(func_in, func_out, anat_in, anat_out, ref_stack, ops=su
     nr,rmin,rmax = suite2p.registration.register.normalize_reference_image([plane for plane in ref_stack])
     
     refAndMasks = compute_reference_masks(nr, ops=ops)
-    maskMul, maskOffset, cfRefImg, maskMulNR, maskOffsetNR, cfRefImgNR, blocks = list(map(list, zip(*refAndMasks)))
+    # maskMul, maskOffset, cfRefImg, maskMulNR, maskOffsetNR, cfRefImgNR, blocks = list(map(list, zip(*refAndMasks)))
+    maskMul, maskOffset, cfRefImg, maskMulNR, maskOffsetNR, cfRefImgNR, blocks = list(zip(*refAndMasks))
+    if len(ref_stack) == 1:
+        refAndMasks = refAndMasks[0]
+        rmin = rmin[0]
+        rmax = rmax[0]
+    
     blocks_ds = ([y // ds_factor[0] for y in blocks[0][0]], [x // ds_factor[1] for x in blocks[0][1]])
     n_blocks = np.product(blocks[0][2])
 
@@ -67,8 +73,8 @@ def registration_wrapper(func_in, func_out, anat_in, anat_out, ref_stack, ops=su
     yoff = np.empty((anat_in.shape[0], n_blocks), dtype=np.float32)
     xoff = np.empty((anat_in.shape[0], n_blocks), dtype=np.float32)
     cmax = np.empty((anat_in.shape[0], n_blocks))
-    zoff = np.empty(anat_in.shape[0], dtype=int)
-    zcmax = np.empty((anat_in.shape[0], len(ref_stack)))
+    zoff = np.empty(anat_in.shape[0], dtype=int) * np.nan
+    zcmax = np.empty((anat_in.shape[0], len(ref_stack))) * np.nan
     
 
     for i in tqdm(np.arange(0, anat_in.shape[0], ops['batch_size'])):
@@ -90,80 +96,105 @@ def registration_wrapper(func_in, func_out, anat_in, anat_out, ref_stack, ops=su
             refAndMasks, batch, rmin=rmin, rmax=rmax, nZ=len(ref_stack), ops=ops
         )
         frames[:n_frames],yoff_r[i:i+n_frames],xoff_r[i:i+n_frames],cmax_r[i:i+n_frames],yoff[i:i+n_frames,:],xoff[i:i+n_frames,:],cmax[i:i+n_frames,:],z = outputs
-        zoff[i:i+n_frames], zcmax[i:i+n_frames,:] = z
+        if z is not None:
+            zoff[i:i+n_frames], zcmax[i:i+n_frames,:] = z
 
-        anat_out.write(suite2p.registration.nonrigid.transform_data( 
+        anat_out[i:i+n_frames] = suite2p.registration.nonrigid.transform_data( 
             data=anat_in[i:i+n_frames],
             yblock=blocks_ds[0],
             xblock=blocks_ds[1],
             nblocks=blocks[0][2],
             ymax1=(yoff[i:i+n_frames, :] + yoff_r[i:i+n_frames, None]) / ds_factor[0],
             xmax1=(xoff[i:i+n_frames, :] + xoff_r[i:i+n_frames, None]) / ds_factor[1],
-        ))
-
+        )
+        
         if func_in is not None and func_out is not None:
-            func_out.write(suite2p.registration.nonrigid.transform_data( 
+            func_out[i:i+n_frames] = suite2p.registration.nonrigid.transform_data( 
                 data=func_in[i:i+n_frames],
                 yblock=blocks_ds[0],
                 xblock=blocks_ds[1],
                 nblocks=blocks[0][2],
                 ymax1=(yoff[i:i+n_frames, :] + yoff_r[i:i+n_frames, None]) / ds_factor[0],
                 xmax1=(xoff[i:i+n_frames, :] + xoff_r[i:i+n_frames, None]) / ds_factor[1],
-            ))
+            )
     return yoff_r, xoff_r, cmax_r, yoff, xoff, cmax, zoff, zcmax
 
-def register(movie_path, stack_path, out_path,  props, anatomy_chan=0, func_chan=1, make_gif=True, overwrite_raw=True):
+def register(anat, stack_path, props, anatomy_chan=0, func_chan=1, make_gif=True, overwrite_raw=True, planes=None):
 
+    print(stack_path)
     stack,_ = suite2p.io.tiff.open_tiff(stack_path,sktiff=0)
     
-    n_frames_per_plane = int(re.search("SI.hStackManager.framesPerSlice = (\d+)", stack.metadata()).groups()[0]) // int(re.search("SI.hScan2D.logAverageFactor = (\d+)", stack.metadata()).groups()[0])
-    stack_size =(int(re.search("SI.hRoiManager.linesPerFrame = (\d+)", stack.metadata()).groups()[0]), int(re.search("SI.hRoiManager.pixelsPerLine = (\d+)", stack.metadata()).groups()[0]))
-    stack_n_chans = len(re.search("SI.hChannels.channelSave = \[((?:\d+;?)+)\]", stack.metadata()).groups()[0].split(';'))
+    r = re.search("SI.hStackManager.framesPerSlice = (\d+)", stack.metadata())
+    if r is None: #TODO: for now, assumes a single frame/plane
+        n_frames_per_plane = 1
+        stack_size = (*stack.shape(),)
+        stack_n_chans = 1
+    else:
+        n_frames_per_plane = int(r.groups()[0]) // int(re.search("SI.hScan2D.logAverageFactor = (\d+)", stack.metadata()).groups()[0])
+        stack_size =(int(re.search("SI.hRoiManager.linesPerFrame = (\d+)", stack.metadata()).groups()[0]), int(re.search("SI.hRoiManager.pixelsPerLine = (\d+)", stack.metadata()).groups()[0]))
+        stack_n_chans = len(re.search("SI.hChannels.channelSave = \[((?:\d+;?)+)\]", stack.metadata()).groups()[0].split(';'))
 
     stack_data = stack.data().reshape((-1,n_frames_per_plane,stack_n_chans,*stack_size))[:,:,anatomy_chan].mean(axis=1)
+    if planes is not None:
+        stack_data = stack_data[planes[0]:planes[1]]
+    # stack_data = stack_data.mean(axis=0).reshape((1,*stack_size)) #TODO: test whether it's okay to just take the mean proj
 
-    in_path, in_file = os.path.split(movie_path)
+    # in_path, in_file = os.path.split(movie_path)
+    bin_path, bin_file = os.path.split(anat.filename)
+    reg_root = os.path.splitext(bin_file)[0]
 
-    if os.path.exists(os.path.join(out_path, 'functional.bin')):
-        raw_file = os.path.join(out_path, 'functional.bin')
-        reg_file = os.path.join(out_path, 'functional_reg.bin')
-        do_func = True
-    else:
-        raw_file = os.path.join(out_path, 'anatomy.bin')
-        reg_file = os.path.join(out_path, 'anatomy_reg.bin')
-        do_func = False
+    print(bin_path)
+
+    # if os.path.exists(os.path.join(out_path, 'functional.bin')):
+    #     raw_file = os.path.join(out_path, 'functional.bin')
+    #     reg_file = os.path.join(out_path, 'functional_reg.bin')
+    #     do_func = True
+    # else:
+    #     raw_file = os.path.join(out_path, 'anatomy.bin')
+    #     reg_file = os.path.join(out_path, 'anatomy_reg.bin')
+    #     do_func = False
 
 
     ops = suite2p.default_ops()
     ops.update(dict(
         nplanes = 1, #will this work?
-        tiff_list = [in_file],
-        data_path = [in_path],
-        raw_file = raw_file,
-        raw_file_chan2 = os.path.join(out_path, 'anatomy.bin'),   
-        reg_file = reg_file,
-        reg_file_chan2 = os.path.join(out_path, 'anatomy_reg.bin'),   
-        save_path0 = out_path,#os.path.join(out_path,'movie.bin'),
-        save_folder = out_path,
-        nchannels = props['n_channels'],
-        align_by_chan = anatomy_chan + 1,
-        functional_chan = func_chan + 1,
+        # tiff_list = [in_file],
+        # data_path = [in_path],
+        # raw_file = raw_file,
+        # raw_file_chan2 = os.path.join(out_path, 'anatomy.bin'),   
+        # reg_file = reg_file,
+        # reg_file_chan2 = os.path.join(out_path, 'anatomy_reg.bin'),   
+        ####
+        # raw_file = inout_path,
+        # raw_file_chan2 = inout_path,
+        # reg_file = os.path.join(bin_path, reg_root + "_reg.bin"),
+        # reg_file_chan2 = os.path.join(bin_path, reg_root + "_reg.bin"),
+
+        #####
+        save_path0 = bin_path,#os.path.join(out_path,'movie.bin'),
+        save_folder = bin_path,
+        # nchannels = props['n_channels'],
+        # align_by_chan = anatomy_chan + 1,
+        # functional_chan = func_chan + 1,
         nonrigid = True,
         keep_movie_raw = True,
-        input_format = 'tif'
+        # input_format = 'tif'
     ))
 
-    if do_func:
-        func = suite2p.io.BinaryRWFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], filename=ops['raw_file'])        
-        reg_f = suite2p.io.BinaryRWFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], filename=ops['reg_file'])
-    else:
-        func = None
-        reg_f = None
-    anat = suite2p.io.BinaryRWFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], filename=ops['raw_file_chan2'])
-    reg_a = suite2p.io.BinaryRWFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], filename=ops['reg_file_chan2'])
+    # if do_func:
+    #     func = suite2p.io.BinaryRWFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], filename=ops['raw_file'])        
+    #     reg_f = suite2p.io.BinaryRWFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], filename=ops['reg_file'])
+    # else:
+    #     func = None
+    #     reg_f = None
+
+    print(anat.filename, os.path.join(bin_path, reg_root + "_reg.bin"))    
+    reg_anat = suite2p.io.BinaryFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], n_frames = anat.n_frames, filename=os.path.join(bin_path, reg_root + "_reg.bin"))
     
     
-    outputs = registration_wrapper(func, reg_f, anat, reg_a, stack_data, ops=ops)
+    # outputs = registration_wrapper(func, reg_f, anat, reg_a, stack_data, ops=ops)
+    outputs = registration_wrapper(None, None, anat, reg_anat, stack_data, ops=ops)
+    # outputs = suite2p.registration_wrapper(reg_anat, anat, None, None, stack_data[0], ops=ops)
     yoff_r, xoff_r, cmax_r, yoff, xoff, cmax, zoff, zcmax = outputs
     reg_data = {
         'y_rigid':yoff_r,
@@ -177,29 +208,31 @@ def register(movie_path, stack_path, out_path,  props, anatomy_chan=0, func_chan
     }
 
     # suite2p.registration.register.save_registration_outputs_to_ops(outputs, ops)
-    np.save(os.path.join(out_path,'ops.npy'), ops, allow_pickle=True)
-    np.save(os.path.join(out_path,'reg.npy'), reg_data, allow_pickle=True)    
+    np.save(os.path.join(bin_path, reg_root + '_ops.npy'), ops, allow_pickle=True)
+    np.save(os.path.join(bin_path, reg_root + '_reg.npy'), reg_data, allow_pickle=True)    
 
     if make_gif:
         fig = plt.figure()
-        i = np.random.randint(0,anat.shape[0])
-        im = plt.imshow(anat[i].squeeze(), aspect=props['frame_shape'][1]/props['frame_shape'][0]) #assumes nonsquare pix...
-        plt.clim(np.percentile(anat[i],10), np.percentile(anat[i],90))
+        i = np.random.randint(0,reg_anat.shape[0])
+        im = plt.imshow(reg_anat[i].squeeze(), aspect=props['frame_shape'][1]/props['frame_shape'][0]) #assumes nonsquare pix...
+        plt.clim(np.percentile(reg_anat[i],10), np.percentile(reg_anat[i],90))
 
 
         def animate(i):
-            im.set_data(anat[np.random.randint(0,anat.shape[0])].squeeze())
+            im.set_data(reg_anat[np.random.randint(0,reg_anat.shape[0])].squeeze())
             return [im]
 
         anim = animation.FuncAnimation(fig, animate, frames = 300, interval = 1000/30)
-        anim.save(os.path.join(out_path, 'reg_anat_sample.gif'),fps = 30)
+        anim.save(os.path.join(bin_path, reg_root + '_reg_sample.gif'),fps = 30)
     
     return ops
 
 def get_shift(reg_path, stack_shape, props):
     #load the ops and the registration file from the data path
-    ops = np.load(os.path.join(reg_path, "ops.npy"), allow_pickle=True).flatten()[0]
-    reg = np.load(os.path.join(reg_path, "reg.npy"), allow_pickle=True).flatten()[0]
+    # ops = np.load(os.path.join(reg_path, "ops.npy"), allow_pickle=True).flatten()[0]
+    # reg = np.load(os.path.join(reg_path, "reg.npy"), allow_pickle=True).flatten()[0]
+    ops = np.load(reg_path + "_anatomy_ops.npy", allow_pickle=True).flatten()[0]
+    reg = np.load(reg_path + "_anatomy_reg.npy", allow_pickle=True).flatten()[0]
 
     #determine the shape of the reference stack
     # stack,_ = suite2p.io.tiff.open_tiff(stack_path,sktiff=0)
@@ -242,4 +275,15 @@ def get_shift(reg_path, stack_shape, props):
     return x,y
 
 if __name__ == "__main__":
-    register(r"C:\Users\zfj\data\100522B\region1_00001.tif",r"C:\Users\zfj\data\100522B\region1_stack_00002.tif",r"C:\Users\zfj\data\100522B\region1_00001")
+    #register(r"C:\Users\zfj\data\100522B\region1_00001.tif",r"C:\Users\zfj\data\100522B\region1_stack_00002.tif",r"C:\Users\zfj\data\100522B\region1_00001")   
+    props = {
+        'frame_shape':(32,256)
+    }
+
+    anat_file = suite2p.io.BinaryFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], filename=r"C:\Users\zfj\data\071323B\func\region1_00001_anatomy.bin")
+            
+    register(anat_file,
+             r"C:\Users\zfj\data\071323B\071323B_region1_stack_red_max_vitreousmasked.tif", props)
+    
+    # def register(anat, stack_path, props, anatomy_chan=0, func_chan=1, make_gif=True, overwrite_raw=True):
+

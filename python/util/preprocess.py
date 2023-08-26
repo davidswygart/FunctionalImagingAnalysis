@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from typing import List, Dict, Tuple, Any
 import os
-
 #symphony
 import h5py
 
@@ -137,10 +136,10 @@ def read_raw_file(raw_data_file: str, raw_binary_path: str, functional_channel: 
 
     if raw_binary_path is not None:
         if not os.path.exists(os.path.join(raw_binary_path, 'functional.bin')):
-            func = suite2p.io.BinaryRWFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], filename=os.path.join(raw_binary_path, 'functional.bin'))
+            func = suite2p.io.BinaryFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], filename=os.path.join(raw_binary_path, 'functional.bin'))
             func.write(data[:,functional_channel,:,:])
         if not os.path.exists(os.path.join(raw_binary_path, 'anatomy.bin')):
-            anat = suite2p.io.BinaryRWFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], filename=os.path.join(raw_binary_path, 'anatomy.bin'))
+            anat = suite2p.io.BinaryFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], filename=os.path.join(raw_binary_path, 'anatomy.bin'))
             anat.write(data[:,anatomy_channel,:,:])
     
     return data, props
@@ -262,8 +261,8 @@ def cluster_trigger_events(trigger, flips, projector_frame_rate: float=60.0):
         np.insert(props['trials'], 0, props['flips'][0])
 
 
-    if len(props['dropped']):
-        print(f"Dropped {len(props['dropped'])} frames in {len(props['trials'])} trials ({len(props['dropped'])/(len(props['flips']) + len(props['dropped'])) * 100:.03f}%)")
+    # if len(props['dropped']):
+    #     print(f"Dropped {len(props['dropped'])} frames in {len(props['trials'])} trials ({len(props['dropped'])/(len(props['flips']) + len(props['dropped'])) * 100:.03f}%)")
     return props
 
 def align_frames_to_epochs(epochs: pd.DataFrame, props: Dict[str, Any]) -> Tuple[pd.DataFrame, Dict[str, Any]]:
@@ -486,7 +485,8 @@ def segment(bin_path, props, events, mask_file, dark_file, func_channel = 1, dat
     dark_level = suite2p.io.tiff.ScanImageTiffReader(dark_file).data().reshape(-1,props['n_channels'],*props['frame_shape'])[:,func_channel,:,:].flatten().mean()
     
     if data is None:
-        data = suite2p.io.BinaryRWFile(*props['frame_shape'], os.path.join(bin_path,'functional.bin')).data
+        # data = suite2p.io.BinaryFile(*props['frame_shape'], bin_path + '_functional.bin').data
+        data = np.load(bin_path + '_functional.npy')
 
     
     if type(mask_file) == str:
