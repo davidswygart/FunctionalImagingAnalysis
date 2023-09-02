@@ -116,7 +116,7 @@ def read_raw_file(raw_data_file: str, raw_binary_path: str, functional_channel: 
     props['bidi_phase_offset'] = float(re.search("SI.hScan2D.linePhase = (\d+.?\d*e-\d+)", md).groups()[0])
     props['bin_factor'] = int(re.search("SI.hScan2D.pixelBinFactor = (\d+)", md).groups()[0])
     
-    props['n_channels'] = len(re.search("SI.hChannels.channelSave = \[((?:\d*;?)+)\]", md).groups()[0].split(';'))
+    props['n_channels'] = len(re.search("SI.hChannels.channelSave = \[((?:\d*[ ;]?)+)\]", md).groups()[0].replace(' ', ';').split(';'))
     props['frame_shape'] =(int(re.search("SI.hRoiManager.linesPerFrame = (\d+)", md).groups()[0]), int(re.search("SI.hRoiManager.pixelsPerLine = (\d+)", md).groups()[0]))
 
     #TODO: check this for non-square imaging fields

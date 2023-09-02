@@ -52,8 +52,12 @@ def registration_wrapper(func_in, func_out, anat_in, anat_out, ref_stack, ops=su
     data_shape = anat_in.shape[1:]
     ds_factor = (stack_shape[0]//data_shape[0], stack_shape[1]//data_shape[1])
 
+    # print(len(ref_stack))
+
     nr,rmin,rmax = suite2p.registration.register.normalize_reference_image([plane for plane in ref_stack])
     
+    # print(len(nr))
+    # print(nr[0].shape)
     refAndMasks = compute_reference_masks(nr, ops=ops)
     # maskMul, maskOffset, cfRefImg, maskMulNR, maskOffsetNR, cfRefImgNR, blocks = list(map(list, zip(*refAndMasks)))
     maskMul, maskOffset, cfRefImg, maskMulNR, maskOffsetNR, cfRefImgNR, blocks = list(zip(*refAndMasks))
@@ -127,12 +131,14 @@ def register(anat, stack_path, props, anatomy_chan=0, func_chan=1, make_gif=True
     r = re.search("SI.hStackManager.framesPerSlice = (\d+)", stack.metadata())
     if r is None: #TODO: for now, assumes a single frame/plane
         n_frames_per_plane = 1
-        stack_size = (*stack.shape(),)
+        stack_size = (*stack.shape()[-2:],)
         stack_n_chans = 1
+        print("Using a processed reference stack")
     else:
         n_frames_per_plane = int(r.groups()[0]) // int(re.search("SI.hScan2D.logAverageFactor = (\d+)", stack.metadata()).groups()[0])
         stack_size =(int(re.search("SI.hRoiManager.linesPerFrame = (\d+)", stack.metadata()).groups()[0]), int(re.search("SI.hRoiManager.pixelsPerLine = (\d+)", stack.metadata()).groups()[0]))
-        stack_n_chans = len(re.search("SI.hChannels.channelSave = \[((?:\d+;?)+)\]", stack.metadata()).groups()[0].split(';'))
+        stack_n_chans = len(re.search("SI.hChannels.channelSave = \[((?:\d+[ ;]?)+)\]", stack.metadata()).groups()[0].replace(' ',';').split(';'))
+        print("Using a raw reference stack")
 
     stack_data = stack.data().reshape((-1,n_frames_per_plane,stack_n_chans,*stack_size))[:,:,anatomy_chan].mean(axis=1)
     if planes is not None:
@@ -142,8 +148,6 @@ def register(anat, stack_path, props, anatomy_chan=0, func_chan=1, make_gif=True
     # in_path, in_file = os.path.split(movie_path)
     bin_path, bin_file = os.path.split(anat.filename)
     reg_root = os.path.splitext(bin_file)[0]
-
-    print(bin_path)
 
     # if os.path.exists(os.path.join(out_path, 'functional.bin')):
     #     raw_file = os.path.join(out_path, 'functional.bin')
@@ -188,7 +192,6 @@ def register(anat, stack_path, props, anatomy_chan=0, func_chan=1, make_gif=True
     #     func = None
     #     reg_f = None
 
-    print(anat.filename, os.path.join(bin_path, reg_root + "_reg.bin"))    
     reg_anat = suite2p.io.BinaryFile(Lx=props['frame_shape'][1], Ly=props['frame_shape'][0], n_frames = anat.n_frames, filename=os.path.join(bin_path, reg_root + "_reg.bin"))
     
     
