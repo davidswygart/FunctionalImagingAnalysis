@@ -33,7 +33,7 @@ from PIL import Image
 #TODO: separate out the common experiment code from the chirp/spot/bar code?
 
 class Experiment:
-    def __init__(self, timing_file: str, raw_files: List[str], bin_path: str, artifact_file: str, stack_file: str, mask_file: str, dark_file: str, func_channel = 1, anat_channel=0, planes=None):
+    def __init__(self, timing_file: str, raw_files: List[str], bin_path: str, artifact_file: str, stack_file: str, mask_file: str, dark_file: str, func_channel = 1, anat_channel=0, planes=None, fixed_offset=None):
         self.timing_file = timing_file
         self.raw_files = raw_files
         self.bin_path = bin_path
@@ -56,9 +56,10 @@ class Experiment:
         epochs['flips'] = None
         epochs['frame_indices'] = None
         
-        mask = Image.open(mask_file)
-        mask_shape = mask.size
-        mask = np.asarray(mask.getdata()).reshape(mask_shape)
+        if mask_file is not None:
+            mask = Image.open(mask_file)
+            mask_shape = mask.size
+            mask = np.asarray(mask.getdata()).reshape(mask_shape)
 
         #TODO: we need to increment flips for each file?
         
@@ -119,6 +120,8 @@ class Experiment:
             # 6) register
             if os.path.exists(os.path.join(bin_path, raw_file_root + '_anatomy_reg.npy')):
                 print('Already registered')
+            elif fixed_offset is not None:
+                pass
             else:
                 register.register(
                     anat_file,
@@ -129,25 +132,25 @@ class Experiment:
             del anat_file
 
             # 7) segment
-            
-            if len(spots) and not os.path.exists(os.path.join(bin_path, raw_file_root + '_spots.parquet')):
-                si = spots.copy()
-                si.index = si.index + si.epoch_id*28 #nspotsperepoch
-                spots_df = preprocess.segment(os.path.join(bin_path, raw_file_root), props, si, mask, dark_file, func_channel = 1, data = self.func)
-                spots_df.join(si[['cx','cy']], on='trial').to_parquet(os.path.join(bin_path, raw_file_root + '_spots.parquet'))
-                del spots_df
+            if mask_file is not None:
+                if len(spots) and not os.path.exists(os.path.join(bin_path, raw_file_root + '_spots.parquet')):
+                    si = spots.copy()
+                    si.index = si.index + si.epoch_id*28 #nspotsperepoch
+                    spots_df = preprocess.segment(os.path.join(bin_path, raw_file_root), props, si, mask, dark_file, func_channel = 1, data = self.func, fixed_offset = fixed_offset)
+                    spots_df.join(si[['cx','cy']], on='trial').to_parquet(os.path.join(bin_path, raw_file_root + '_spots.parquet'))
+                    del spots_df
 
-            if len(chirps) and not os.path.exists(os.path.join(bin_path, raw_file_root + '_chirps.parquet')):
-                chirps_df = preprocess.segment(os.path.join(bin_path, raw_file_root), props, chirps.set_index('epoch_id'), mask, dark_file, func_channel = 1, data = self.func)
-                chirps_df.to_parquet(os.path.join(bin_path, raw_file_root + '_chirps.parquet'))
-                del chirps_df
+                if len(chirps) and not os.path.exists(os.path.join(bin_path, raw_file_root + '_chirps.parquet')):
+                    chirps_df = preprocess.segment(os.path.join(bin_path, raw_file_root), props, chirps.set_index('epoch_id'), mask, dark_file, func_channel = 1, data = self.func, fixed_offset = fixed_offset)
+                    chirps_df.to_parquet(os.path.join(bin_path, raw_file_root + '_chirps.parquet'))
+                    del chirps_df
 
-            if len(bars) and not os.path.exists(os.path.join(bin_path, raw_file_root + '_bars.parquet')):
-                bi = bars.copy()
-                bi.index = bi.index + bi.epoch_id*10 #nbarsperepoch
-                bars_df = preprocess.segment(os.path.join(bin_path, raw_file_root), props, bi, mask, dark_file, func_channel = 1, data = self.func)
-                bars_df.join(bi[['theta']], on='trial').to_parquet(os.path.join(bin_path, raw_file_root + '_bars.parquet'))
-                del bars_df
+                if len(bars) and not os.path.exists(os.path.join(bin_path, raw_file_root + '_bars.parquet')):
+                    bi = bars.copy()
+                    bi.index = bi.index + bi.epoch_id*10 #nbarsperepoch
+                    bars_df = preprocess.segment(os.path.join(bin_path, raw_file_root), props, bi, mask, dark_file, func_channel = 1, data = self.func, fixed_offset = fixed_offset)
+                    bars_df.join(bi[['theta']], on='trial').to_parquet(os.path.join(bin_path, raw_file_root + '_bars.parquet'))
+                    del bars_df
 
         # 8) interpolate?
         

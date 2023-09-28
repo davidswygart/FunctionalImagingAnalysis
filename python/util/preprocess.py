@@ -475,7 +475,7 @@ def do_registration(raw_data_file, stack_file, out_path, props):
     #todo...
     register.register(raw_data_file, stack_file, out_path, props=props, make_gif=True)
 
-def segment(bin_path, props, events, mask_file, dark_file, func_channel = 1, data = None):
+def segment(bin_path, props, events, mask_file, dark_file, func_channel = 1, data = None, fixed_offset=None):
     '''
     '''
     # if stim_type is None:
@@ -494,13 +494,20 @@ def segment(bin_path, props, events, mask_file, dark_file, func_channel = 1, dat
     else:
         mask = mask_file
 
-    reg_x, reg_y = register.get_shift(bin_path, mask.shape, props)
-    reg_x = reg_x.flatten()
-    reg_y = reg_y.flatten()
-    # reg_x and reg_y are in the stack coordinates
-
-
+    
     F,Y,X = data.shape
+
+    if fixed_offset is None:
+        reg_x, reg_y = register.get_shift(bin_path, mask.shape, props)
+        reg_x = reg_x.flatten()
+        reg_y = reg_y.flatten()
+        # reg_x and reg_y are in the stack coordinates
+    else:
+        reg_y = (np.tile(np.linspace(0,mask.shape[0], Y)[None,:,None].astype(int), (F,1, X)) + fixed_offset[0]).flatten()
+        reg_x = (np.tile(np.linspace(0,mask.shape[1], X)[None,None,:].astype(int), (F,Y,1)) + fixed_offset[1]).flatten()
+
+
+
 
     tt = np.zeros((F,Y,X))
 
@@ -559,6 +566,7 @@ def segment(bin_path, props, events, mask_file, dark_file, func_channel = 1, dat
 
         # df_raw.loc[trial_out,'x'] = reg_x[trial_in]
         # df_raw.loc[trial_out,'y'] = reg_y[trial_in]
+
         df_raw.loc[trial_out,'x'] = reg_x[np.ravel_multi_index((ft[trial_in], yt[trial_in], xt[trial_in]), (len(reg_x), *props['frame_shape']))]
         df_raw.loc[trial_out,'y'] = reg_y[np.ravel_multi_index((ft[trial_in], yt[trial_in], xt[trial_in]), (len(reg_y), *props['frame_shape']))]    
 
